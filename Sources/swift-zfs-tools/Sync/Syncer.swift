@@ -8,7 +8,6 @@ extension ZFSTools {
     private let _isSyncing: DispatchedValue<Bool>
     private let shell: ShellExecutor
     private let config: ZFSTools.Action.Config.Sync
-    private let calendar: Calendar
     private let dateFormatter: DateFormatter
 
     private let sshLogin: String
@@ -16,13 +15,11 @@ extension ZFSTools {
     public init(
       shell: ShellExecutor,
       config: ZFSTools.Action.Config.Sync,
-      calendar: Calendar,
       dateFormatter: DateFormatter,
       syncNow: Bool
     ) {
       self.shell = shell
       self.config = config
-      self.calendar = calendar
       self.dateFormatter = dateFormatter
       sshLogin = "ssh -i \(config.sshKeyPath) \(config.sshIP)"
       _isSyncing = .init(syncNow)

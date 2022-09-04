@@ -90,7 +90,15 @@ extension ZFSTools {
     }
 
     private func performSync(_ config: ZFSTools.Action.Config) {
-
+      guard let syncConfig: ZFSTools.Action.Config.Sync = fileManager.decodedJSON(atPath: config.path) else { return }
+      let snapshotter = Syncer(
+        shell: shell,
+        config: syncConfig,
+        dateFormatter: dateFormatter,
+        syncNow: true
+      )
+      let poller = Poller { snapshotter.isSyncing }
+      while poller.isBusy { }
     }
   }
 }
