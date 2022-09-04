@@ -59,7 +59,7 @@ extension ZFSTools {
     private func performAction(_ action: ZFSTools.Action) {
       switch action {
       case .snapshot(let config): performSnapshot(config)
-      case .consolidation(let config): performConsolidation(config)
+      case .consolidate(let config): performConsolidate(config)
       case .sync(let config): performSync(config)
       }
     }
@@ -76,11 +76,11 @@ extension ZFSTools {
       while poller.isBusy { }
     }
 
-    private func performConsolidation(_ config: ZFSTools.Action.Config) {
-      guard let consolidationConfig: ZFSTools.Action.Config.Consolidation = fileManager.decodedJSON(atPath: config.path) else { return }
+    private func performConsolidate(_ config: ZFSTools.Action.Config) {
+      guard let consolidateConfig: ZFSTools.Action.Config.Consolidate = fileManager.decodedJSON(atPath: config.path) else { return }
       let consolidator = Consolidator(
         shell: shell,
-        config: consolidationConfig,
+        config: consolidateConfig,
         calendar: calendar,
         dateFormatter: dateFormatter,
         consolidateNow: true

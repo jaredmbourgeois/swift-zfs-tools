@@ -1,12 +1,12 @@
 import Foundation
 
 extension ZFSTools.Action.Config {
-  public struct Consolidation: Codable {
+  public struct Consolidate: Codable {
     public let password: String
     public let datasetMatch: String
     public let snapshotDateSeparator: String
     public let snapshotsNotConsolidated: [String]
-    public let consolidationPeriod: ZFSTools.Consolidator.ConsolidationPeriod
+    public let consolidatePeriod: ZFSTools.Consolidator.ConsolidatePeriod
     public let dryRun: Bool
 
     public init(
@@ -14,14 +14,14 @@ extension ZFSTools.Action.Config {
       datasetMatch: String,
       snapshotDateSeparator: String,
       snapshotsNotConsolidated: [String],
-      consolidationPeriod: ZFSTools.Consolidator.ConsolidationPeriod,
+      consolidatePeriod: ZFSTools.Consolidator.ConsolidatePeriod,
       dryRun: Bool
     ) {
       self.password = password
       self.datasetMatch = datasetMatch
       self.snapshotDateSeparator = snapshotDateSeparator
       self.snapshotsNotConsolidated = snapshotsNotConsolidated
-      self.consolidationPeriod = consolidationPeriod
+      self.consolidatePeriod = consolidatePeriod
       self.dryRun = dryRun
     }
 

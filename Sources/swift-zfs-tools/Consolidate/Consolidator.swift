@@ -9,13 +9,13 @@ extension ZFSTools {
 
     private let _isConsolidating: DispatchedValue<Bool>
     private let shell: ShellExecutor
-    private let config: ZFSTools.Action.Config.Consolidation
+    private let config: ZFSTools.Action.Config.Consolidate
     private let calendar: Calendar
     private let dateFormatter: DateFormatter
 
     public init(
       shell: ShellExecutor,
-      config: ZFSTools.Action.Config.Consolidation,
+      config: ZFSTools.Action.Config.Consolidate,
       calendar: Calendar,
       dateFormatter: DateFormatter,
       consolidateNow: Bool
@@ -55,14 +55,14 @@ extension ZFSTools {
     }
 
     private func consolidatedSnapshots(_ snapshots: [String]) -> [String] {
-      let snapshotsAndDates: [ConsolidationPeriod.SnapshotAndDate] = snapshots.compactMap { snapshot in
+      let snapshotsAndDates: [ConsolidatePeriod.SnapshotAndDate] = snapshots.compactMap { snapshot in
         guard let dateText = snapshot.splitXP(by: config.snapshotDateSeparator).last,
               let date = dateFormatter.date(from: dateText) else { return nil }
         return .init(snapshot: snapshot, date: date)
       }
-      let snapshotPeriodRangeSnapshotAndDates = config.consolidationPeriod.snapshotPeriodRangeSnapshotAndDates(
+      let snapshotPeriodRangeSnapshotAndDates = config.consolidatePeriod.snapshotPeriodRangeSnapshotAndDates(
         calendar,
-        snapshotPeriodBias: config.consolidationPeriod.snapshotPeriodBias,
+        snapshotPeriodBias: config.consolidatePeriod.snapshotPeriodBias,
         snapshotAndDates: snapshotsAndDates
       )
       return snapshotPeriodRangeSnapshotAndDates.snapshots

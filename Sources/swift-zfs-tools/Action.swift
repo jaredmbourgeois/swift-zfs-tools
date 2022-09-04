@@ -3,7 +3,7 @@ import Foundation
 extension ZFSTools {
   public enum Action: Codable, Sendable, Equatable {
     case snapshot(Config)
-    case consolidation(Config)
+    case consolidate(Config)
     case sync(Config)
   }
 }

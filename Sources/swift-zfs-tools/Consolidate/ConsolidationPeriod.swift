@@ -1,7 +1,7 @@
 import Foundation
 
 extension ZFSTools.Consolidator {
-  public struct ConsolidationPeriod: Codable, Hashable, Sendable {
+  public struct ConsolidatePeriod: Codable, Hashable, Sendable {
     public let upperBound: Date
     public let snapshotPeriods: ZFSTools.Consolidator.SnapshotPeriods
     public let snapshotPeriodBias: ZFSTools.Consolidator.SnapshotPeriod.Bias
@@ -46,13 +46,13 @@ extension ZFSTools.Consolidator {
   }
 }
 
-extension Array where Element == ZFSTools.Consolidator.ConsolidationPeriod.SnapshotPeriodRangeSnapshotAndDates {
+extension Array where Element == ZFSTools.Consolidator.ConsolidatePeriod.SnapshotPeriodRangeSnapshotAndDates {
   public var snapshots: [String] {
     map { $0.snapshotAndDate.snapshot }
   }
 }
 
-extension ZFSTools.Consolidator.ConsolidationPeriod {
+extension ZFSTools.Consolidator.ConsolidatePeriod {
   public struct SnapshotPeriodRangeSnapshotAndDates: Codable, Hashable, Sendable {
     public let snapshotPeriod: ZFSTools.Consolidator.SnapshotPeriod
     public let range: Range<Date>
@@ -65,8 +65,8 @@ extension ZFSTools.Consolidator.ConsolidationPeriod {
   }
 }
 
-extension ZFSTools.Consolidator.ConsolidationPeriod {
-  public class ConsolidationPeriodBuilder {
+extension ZFSTools.Consolidator.ConsolidatePeriod {
+  public class ConsolidatePeriodBuilder {
     private let upperBound: Date
     private let snapshotPeriodBias: ZFSTools.Consolidator.SnapshotPeriod.Bias
 
@@ -86,8 +86,8 @@ extension ZFSTools.Consolidator.ConsolidationPeriod {
       return .init(self)
     }
 
-    public func build() -> ZFSTools.Consolidator.ConsolidationPeriod {
-      let period = ZFSTools.Consolidator.ConsolidationPeriod(
+    public func build() -> ZFSTools.Consolidator.ConsolidatePeriod {
+      let period = ZFSTools.Consolidator.ConsolidatePeriod(
         upperBound: upperBound,
         snapshotPeriods: snapshotPeriods,
         snapshotPeriodBias: snapshotPeriodBias
@@ -109,13 +109,13 @@ extension ZFSTools.Consolidator.ConsolidationPeriod {
   }
 
   public class SnapshotFrequencyBuilder: ZFSTools.Consolidator.SnapshotPeriod.SnapshotFrequency.Builder {
-    private let periodBuilder: ConsolidationPeriodBuilder
+    private let periodBuilder: ConsolidatePeriodBuilder
 
-    public init(_ periodBuilder: ConsolidationPeriodBuilder) {
+    public init(_ periodBuilder: ConsolidatePeriodBuilder) {
       self.periodBuilder = periodBuilder
     }
 
-    public func snapshotPeriodComplete() -> ConsolidationPeriodBuilder {
+    public func snapshotPeriodComplete() -> ConsolidatePeriodBuilder {
       periodBuilder.snapshotPeriodComplete(build())
       return periodBuilder
     }
