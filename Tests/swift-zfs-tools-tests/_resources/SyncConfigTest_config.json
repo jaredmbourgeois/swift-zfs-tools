@@ -1,0 +1,8 @@
+{
+  "password": "1234567890",
+  "dryRun": false,
+  "snapshotDateSeparator": "@",
+  "datasetMatch": "nas_12tb\/nas",
+  "sshKeyPath": "key.rsa",
+  "sshIP": "123.456.789.0"
+}

@@ -7,18 +7,21 @@ extension ZFSTools {
     private let _isSnapshotting: DispatchedValue<Bool>
     private let shell: ShellExecutor
     private let config: ZFSTools.Action.Config.Snapshot
+    private let date: () -> Date
     private let dateFormatter: DateFormatter
 
     public init(
       shell: ShellExecutor,
       config: ZFSTools.Action.Config.Snapshot,
+      date: @escaping () -> Date = { .now },
       dateFormatter: DateFormatter,
       snapshotNow: Bool
     ) {
+      _isSnapshotting = .init(snapshotNow)
       self.shell = shell
       self.config = config
+      self.date = date
       self.dateFormatter = dateFormatter
-      _isSnapshotting = .init(snapshotNow)
       guard snapshotNow else { return }
       snapshot()
     }
@@ -39,7 +42,7 @@ extension ZFSTools.Snapshotter {
     if config.recursive {
       command += " -r"
     }
-    command += " \(config.fileSystem)\(config.dateSeparator)\(dateFormatter.string(from: .now))"
+    command += " \(config.dataset)\(config.dateSeparator)\(dateFormatter.string(from: date()))"
     return command
   }
 }

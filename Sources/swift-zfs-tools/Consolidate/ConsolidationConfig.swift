@@ -1,7 +1,7 @@
 import Foundation
 
 extension ZFSTools.Action.Config {
-  public struct Consolidate: Codable {
+  public struct Consolidate: ZFSTools.Model {
     public let password: String
     public let datasetMatch: String
     public let snapshotDateSeparator: String

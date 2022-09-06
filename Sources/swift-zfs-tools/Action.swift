@@ -1,7 +1,7 @@
 import Foundation
 
 extension ZFSTools {
-  public enum Action: Codable, Sendable, Equatable {
+  public enum Action: ZFSTools.Model {
     case snapshot(Config)
     case consolidate(Config)
     case sync(Config)
@@ -9,7 +9,7 @@ extension ZFSTools {
 }
 
 extension ZFSTools.Action {
-  public struct Config: Codable, Sendable, Equatable {
+  public struct Config: ZFSTools.Model {
     public let path: String
   }
 }

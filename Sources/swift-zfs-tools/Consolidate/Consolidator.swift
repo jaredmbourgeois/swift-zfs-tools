@@ -73,7 +73,7 @@ extension ZFSTools {
 // MARK: Helper
 extension ZFSTools.Consolidator {
   private func zfsDatasets() async -> [String] {
-    await shell.zfsDatasets(password: config.password)
+    await shell.zfsDatasets(matching: config.datasetMatch, password: config.password)
   }
 
   private func zfsDestroy(_ subject: String) async {
@@ -81,7 +81,7 @@ extension ZFSTools.Consolidator {
   }
 
   private func zfsSnapshots() async -> [String] {
-    await shell.zfsSnapshots(password: config.password)
+    await shell.zfsSnapshots(matching: config.datasetMatch, password: config.password)
   }
 
   private func zfsSnapshotsWithPattern(_ pattern: String) async -> [String] {

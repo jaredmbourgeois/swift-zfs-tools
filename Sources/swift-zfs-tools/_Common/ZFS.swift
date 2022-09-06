@@ -90,8 +90,8 @@ extension ShellExecutor {
 }
 
 extension ZFSTools {
-  public enum ZFSCommand {
-    public static func list(matching: String? = nil) -> String {
+  enum ZFSCommand {
+    static func list(matching: String? = nil) -> String {
       var command = "zfs list -o name -H"
       if let matching = matching {
         command += " | grep \(matching)"
@@ -99,7 +99,7 @@ extension ZFSTools {
       return command
     }
 
-    public static func listSnapshots(matching: String? = nil) -> String {
+    static func listSnapshots(matching: String? = nil) -> String {
       var command = "zfs list -t snapshot -o name -H"
       if let matching = matching {
         command += " | grep \(matching)"
@@ -107,7 +107,7 @@ extension ZFSTools {
       return command
     }
 
-    public static func destroy(_ subject: String) -> String {
+    static func destroy(_ subject: String) -> String {
       "zfs destroy \(subject)"
     }
   }

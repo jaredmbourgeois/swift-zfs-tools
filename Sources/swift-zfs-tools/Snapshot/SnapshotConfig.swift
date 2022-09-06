@@ -1,21 +1,21 @@
 import Foundation
 
 extension ZFSTools.Action.Config {
-  public struct Snapshot: Codable {
-    public let fileSystem: String
+  public struct Snapshot: ZFSTools.Model {
+    public let dataset: String
     public let recursive: Bool
     public let dateSeparator: String
     public let password: String
     public let dryRun: Bool
 
     public init(
-      fileSystem: String,
+      dataset: String,
       recursive: Bool,
       dateSeparator: String,
       password: String,
       dryRun: Bool
     ) {
-      self.fileSystem = fileSystem
+      self.dataset = dataset
       self.recursive = recursive
       self.dateSeparator = dateSeparator
       self.password = password

@@ -1,7 +1,7 @@
 import Foundation
 
 extension ZFSTools.Consolidator {
-  public struct SnapshotPeriod: Codable, Hashable, Sendable {
+  public struct SnapshotPeriod: ZFSTools.Model {
     public let snapshots: UInt16
     public let frequency: SnapshotFrequency
 
@@ -26,7 +26,7 @@ extension ZFSTools.Consolidator {
 }
 
 extension ZFSTools.Consolidator.SnapshotPeriod {
-  public enum Bias: Codable, Hashable, Sendable {
+  public enum Bias: ZFSTools.Model {
     case upperBound
     case lowerBound
   }
@@ -35,7 +35,7 @@ extension ZFSTools.Consolidator.SnapshotPeriod {
 extension ZFSTools.Consolidator.SnapshotPeriod {
   public typealias SnapshotFrequency = [SnapshotFrequencyComponent]
 
-  public enum SnapshotFrequencyComponent: Codable, Hashable, Sendable {
+  public enum SnapshotFrequencyComponent: ZFSTools.Model {
     case year(UInt16)
     case month(UInt16)
     case weekOfMonth(UInt16)
