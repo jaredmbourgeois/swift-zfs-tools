@@ -31,11 +31,10 @@ class SyncConfigTest: XCTestCase {
 extension SyncConfigTest {
   static let defaultConfig = TestUtilities.syncConfig()
 
-  static let defaultConfigEncode = "{\"password\":\"1234567890\",\"dryRun\":false,\"snapshotDateSeparator\":\"@\",\"datasetMatch\":\"nas_12tb\\/nas\",\"sshKeyPath\":\"sshKeyPath\",\"sshIP\":\"sshIP\"}"
+  static let defaultConfigEncode = "{\"dryRun\":false,\"snapshotDateSeparator\":\"@\",\"datasetMatch\":\"nas_12tb\\/nas\",\"sshKeyPath\":\"sshKeyPath\",\"sshIP\":\"sshIP\"}"
 
   static let defaultConfigDecode = """
     {
-      "password": "1234567890",
       "dryRun": false,
       "snapshotDateSeparator": "@",
       "datasetMatch": "nas_12tb\\/nas",

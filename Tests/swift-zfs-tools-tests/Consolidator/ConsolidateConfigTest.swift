@@ -33,14 +33,13 @@ extension ConsolidateConfigTest {
     period: TestUtilities.consolidatePeriodDefault
   )
 
-  static let defaultConfigEncode = "{\"password\":\"1234567890\",\"snapshotsNotConsolidated\":[],\"consolidatePeriod\":{\"upperBound\":681109200,\"snapshotPeriodBias\":{\"upperBound\":{}},\"snapshotPeriods\":[{\"snapshots\":7,\"frequency\":[{\"day\":{\"_0\":1}}]},{\"snapshots\":3,\"frequency\":[{\"weekOfYear\":{\"_0\":1}}]},{\"snapshots\":11,\"frequency\":[{\"month\":{\"_0\":1}}]},{\"snapshots\":16,\"frequency\":[{\"month\":{\"_0\":3}}]},{\"snapshots\":10,\"frequency\":[{\"month\":{\"_0\":6}}]}]},\"snapshotDateSeparator\":\"@\",\"datasetMatch\":\"nas_12tb\\/nas\",\"dryRun\":false}"
+  static let defaultConfigEncode = "{\"snapshotsNotConsolidated\":[],\"consolidatePeriod\":{\"upperBound\":\"\(TestUtilities.upperBound)\",\"snapshotPeriodBias\":{\"upperBound\":{}},\"snapshotPeriods\":[{\"snapshots\":7,\"frequency\":[{\"day\":{\"_0\":1}}]},{\"snapshots\":3,\"frequency\":[{\"weekOfYear\":{\"_0\":1}}]},{\"snapshots\":11,\"frequency\":[{\"month\":{\"_0\":1}}]},{\"snapshots\":16,\"frequency\":[{\"month\":{\"_0\":3}}]},{\"snapshots\":10,\"frequency\":[{\"month\":{\"_0\":6}}]}]},\"snapshotDateSeparator\":\"@\",\"datasetMatch\":\"nas_12tb\\/nas\",\"dryRun\":false}"
 
   static let defaultConfigDecode = """
     {
-      "password": "1234567890",
       "snapshotsNotConsolidated": [],
       "consolidatePeriod": {
-        "upperBound": 681109200,
+        "upperBound": \"\(TestUtilities.upperBound)\",
         "snapshotPeriodBias": {
           "upperBound": {}
         },

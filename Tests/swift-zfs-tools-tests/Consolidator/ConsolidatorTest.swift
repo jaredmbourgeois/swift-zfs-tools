@@ -7,7 +7,7 @@ import XCTest
 class ConsolidatorTest: XCTestCase {
   func testDeletionWhenSnapshotsOutOfRange() {
     let config = TestUtilities.consolidateConfig(
-      period: ZFSTools.Consolidator.ConsolidatePeriod.ConsolidatePeriodBuilder()
+      period: ZFSTools.Consolidator.ConsolidatePeriod.ConsolidatePeriodBuilder(upperBound: TestUtilities.testDateString)
         .snapshotPeriod(snapshots: 1)
         .with(days: 2)
         .snapshotPeriodComplete()
@@ -22,7 +22,7 @@ class ConsolidatorTest: XCTestCase {
       ),
       actionHandler: { action in
         guard action.command.contains("echo kept 0, deleted 36 snapshots") else { return }
-        print("TEST \(action.command)")
+        print("TEST: \(action.command)")
         expectation.fulfill()
       },
       config: config
@@ -40,7 +40,7 @@ class ConsolidatorTest: XCTestCase {
     ]
     let config = TestUtilities.consolidateConfig(
       snapshotsNotConsolidated: keepSnapshots,
-      period: ZFSTools.Consolidator.ConsolidatePeriod.ConsolidatePeriodBuilder()
+      period: ZFSTools.Consolidator.ConsolidatePeriod.ConsolidatePeriodBuilder(upperBound: TestUtilities.testDateString)
         .snapshotPeriod(snapshots: 1)
         .with(days: 2)
         .snapshotPeriodComplete()
@@ -58,7 +58,7 @@ class ConsolidatorTest: XCTestCase {
           XCTAssertNotEqual("zfs destroy \($0)", action.command)
         }
         guard action.command.contains("echo kept 3, deleted 33 snapshots") else { return }
-        print("TEST \(action.command)")
+        print("TEST: \(action.command)")
         expectation.fulfill()
       },
       config: config
@@ -85,7 +85,7 @@ class ConsolidatorTest: XCTestCase {
       ),
       actionHandler: { action in
         guard action.command.contains("echo kept 36, deleted 0 snapshots") else { return }
-        print("TEST \(action.command)")
+        print("TEST: \(action.command)")
         expectation.fulfill()
       },
       config: config
@@ -97,7 +97,7 @@ class ConsolidatorTest: XCTestCase {
   
   func testThreeSnapshotsPerDayAreConsolidatedToSinglePerPeriod() throws {
     try testSnapshotConsolidation(
-      upperBound: Date(),
+      upperBound: TestUtilities.testDate,
       daysPerSnapshot: 3,
       snapshotPeriods: 64,
       snapshotsPerDay: 3
@@ -106,7 +106,7 @@ class ConsolidatorTest: XCTestCase {
 
   func testTwoSnapshotsPerDayAreConsolidatedToSinglePerPeriod() throws {
     try testSnapshotConsolidation(
-      upperBound: Date(),
+      upperBound: TestUtilities.testDate,
       daysPerSnapshot: 3,
       snapshotPeriods: 64,
       snapshotsPerDay: 2
@@ -115,7 +115,7 @@ class ConsolidatorTest: XCTestCase {
 
   func testOneSnapshotsPerDayAreConsolidatedToSinglePerPeriod() throws {
     try testSnapshotConsolidation(
-      upperBound: Date(),
+      upperBound: TestUtilities.testDate,
       daysPerSnapshot: 3,
       snapshotPeriods: 64,
       snapshotsPerDay: 1
@@ -130,7 +130,7 @@ class ConsolidatorTest: XCTestCase {
   ) throws {
     let config = TestUtilities.consolidateConfig(
       datasetMatch: TestUtilities.zfsDatasetsSingle[0],
-      period: ZFSTools.Consolidator.ConsolidatePeriod.ConsolidatePeriodBuilder()
+      period: ZFSTools.Consolidator.ConsolidatePeriod.ConsolidatePeriodBuilder(upperBound: TestUtilities.testDateFormatter.string(from: upperBound))
         .snapshotPeriod(snapshots: snapshotPeriods)
         .with(days: daysPerSnapshot)
         .snapshotPeriodComplete()
@@ -157,7 +157,7 @@ class ConsolidatorTest: XCTestCase {
       ),
       actionHandler: { action in
         guard action.command == "echo kept \(snapshotsKept), deleted \(snapshotsDeleted) snapshots" else { return }
-        print("TEST \(action.command)")
+        print("TEST: \(action.command)")
         expectation.fulfill()
       },
       config: config
@@ -204,29 +204,25 @@ extension ConsolidatorTest {
     zfsListSnapshotOutput: String
   ) -> [MockShell.CommandHandler] {
     [
-      .sudo({ command, password in
-        guard password == config.password,
-              command == "zfs list -o name -H | grep \(config.datasetMatch)" else { return nil }
+      .sudo({ command in
+        guard command == "zfs list -o name -H | grep \(config.datasetMatch)" else { return nil }
         return .output(zfsListOutput)
       }),
-      .sudo({ command, password in
-        guard password == config.password,
-              command == "zfs list -t snapshot -o name -H" else { return nil }
+      .sudo({ command in
+        guard command == "zfs list -t snapshot -o name -H" else { return nil }
         return .output(zfsListSnapshotOutput)
       }),
-      .sudo({ command, password in
+      .sudo({ command in
         let prefix = "zfs list -t snapshot -o name -H | grep "
-        guard password == config.password,
-              command.starts(with: prefix) else { return nil }
+        guard command.starts(with: prefix) else { return nil }
         let pattern = command.dropFirst(prefix.count)
         let output = zfsListSnapshotOutput.lines
           .filter { $0.contains(pattern) }
           .joined(separator: "\n")
         return .output(output)
       }),
-      .sudo({ command, password in
-        guard password == config.password,
-              command.contains("zfs destroy ") else { return nil }
+      .sudo({ command in
+        guard command.contains("zfs destroy ") else { return nil }
         return .output("")
       })
     ]

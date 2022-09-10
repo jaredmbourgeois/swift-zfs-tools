@@ -1,5 +1,4 @@
 {
-   "password":"1234567890",
    "dryRun":false,
    "dateSeparator":"@",
    "dataset":"nas_12tb\/nas",

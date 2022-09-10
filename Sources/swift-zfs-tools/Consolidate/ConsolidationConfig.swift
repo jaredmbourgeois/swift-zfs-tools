@@ -2,7 +2,6 @@ import Foundation
 
 extension ZFSTools.Action.Config {
   public struct Consolidate: ZFSTools.Model {
-    public let password: String
     public let datasetMatch: String
     public let snapshotDateSeparator: String
     public let snapshotsNotConsolidated: [String]
@@ -10,14 +9,12 @@ extension ZFSTools.Action.Config {
     public let dryRun: Bool
 
     public init(
-      password: String,
       datasetMatch: String,
       snapshotDateSeparator: String,
       snapshotsNotConsolidated: [String],
       consolidatePeriod: ZFSTools.Consolidator.ConsolidatePeriod,
       dryRun: Bool
     ) {
-      self.password = password
       self.datasetMatch = datasetMatch
       self.snapshotDateSeparator = snapshotDateSeparator
       self.snapshotsNotConsolidated = snapshotsNotConsolidated

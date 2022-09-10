@@ -2,7 +2,6 @@ import Foundation
 
 extension ZFSTools.Action.Config {
   public struct Sync: ZFSTools.Model {
-    public let password: String
     public let datasetMatch: String?
     public let snapshotDateSeparator: String
     public let sshKeyPath: String
@@ -10,14 +9,12 @@ extension ZFSTools.Action.Config {
     public let dryRun: Bool
 
     public init(
-      password: String,
       datasetMatch: String?,
       snapshotDateSeparator: String,
       sshKeyPath: String,
       sshIP: String,
       dryRun: Bool
     ) {
-      self.password = password
       self.datasetMatch = datasetMatch
       self.snapshotDateSeparator = snapshotDateSeparator
       self.sshKeyPath = sshKeyPath

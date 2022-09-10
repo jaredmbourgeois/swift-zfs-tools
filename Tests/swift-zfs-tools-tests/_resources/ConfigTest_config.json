@@ -1,0 +1,26 @@
+{
+  "actions": [
+    {
+      "snapshot": {
+        "_0": {
+          "path": "snapshotConfig.json"
+        }
+      }
+    },
+    {
+      "consolidate": {
+        "_0": {
+          "path": "consolidateConfig.json"
+        }
+      }
+    },
+    {
+      "sync": {
+        "_0": {
+          "path": "syncConfig.json"
+        }
+      }
+    }
+  ],
+  "dateFormat": "yyyyMMdd-HHmmss"
+}

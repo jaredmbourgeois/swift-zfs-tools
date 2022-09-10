@@ -5,20 +5,17 @@ extension ZFSTools.Action.Config {
     public let dataset: String
     public let recursive: Bool
     public let dateSeparator: String
-    public let password: String
     public let dryRun: Bool
 
     public init(
       dataset: String,
       recursive: Bool,
       dateSeparator: String,
-      password: String,
       dryRun: Bool
     ) {
       self.dataset = dataset
       self.recursive = recursive
       self.dateSeparator = dateSeparator
-      self.password = password
       self.dryRun = dryRun
     }
     

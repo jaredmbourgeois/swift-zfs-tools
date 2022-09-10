@@ -62,6 +62,7 @@ extension ZFSTools {
       }
       let snapshotPeriodRangeSnapshotAndDates = config.consolidatePeriod.snapshotPeriodRangeSnapshotAndDates(
         calendar,
+        dateFormatter: dateFormatter,
         snapshotPeriodBias: config.consolidatePeriod.snapshotPeriodBias,
         snapshotAndDates: snapshotsAndDates
       )
@@ -73,19 +74,19 @@ extension ZFSTools {
 // MARK: Helper
 extension ZFSTools.Consolidator {
   private func zfsDatasets() async -> [String] {
-    await shell.zfsDatasets(matching: config.datasetMatch, password: config.password)
+    await shell.zfsDatasets(matching: config.datasetMatch)
   }
 
   private func zfsDestroy(_ subject: String) async {
-    await shell.zfsDestroy(subject, password: config.password, dryRun: config.dryRun)
+    await shell.zfsDestroy(subject, dryRun: config.dryRun)
   }
 
   private func zfsSnapshots() async -> [String] {
-    await shell.zfsSnapshots(matching: config.datasetMatch, password: config.password)
+    await shell.zfsSnapshots(matching: config.datasetMatch)
   }
 
   private func zfsSnapshotsWithPattern(_ pattern: String) async -> [String] {
-    await shell.zfsSnapshots(matching: pattern, password: config.password)
+    await shell.zfsSnapshots(matching: pattern)
   }
 
   private func deleteSnapshots(_ snapshots: [String]) async {
@@ -102,7 +103,7 @@ extension ZFSTools.Consolidator {
     _ command: String,
     function: StaticString = #function
   ) async -> String {
-    await shell.sudoOutput(command, password: config.password, dryRun: config.dryRun, function: function) ?? ""
+    await shell.sudoOutput(command, dryRun: config.dryRun, function: function) ?? ""
   }
 
   @discardableResult
@@ -110,6 +111,6 @@ extension ZFSTools.Consolidator {
     _ command: String,
     function: StaticString = #function
   ) async -> [String] {
-    await shell.sudoOutputLines(command, password: config.password, dryRun: config.dryRun, function: function)
+    await shell.sudoOutputLines(command, dryRun: config.dryRun, function: function)
   }
 }

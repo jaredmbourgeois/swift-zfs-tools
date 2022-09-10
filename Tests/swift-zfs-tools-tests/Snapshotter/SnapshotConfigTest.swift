@@ -31,11 +31,10 @@ class SnapshotConfigTest: XCTestCase {
 extension SnapshotConfigTest {
   static let defaultConfig = TestUtilities.snapshotConfig()
 
-  static let defaultConfigEncode = "{\"password\":\"1234567890\",\"dryRun\":false,\"dateSeparator\":\"@\",\"dataset\":\"nas_12tb\\/nas\",\"recursive\":true}"
+  static let defaultConfigEncode = "{\"dryRun\":false,\"dateSeparator\":\"@\",\"dataset\":\"nas_12tb\\/nas\",\"recursive\":true}"
 
   static let defaultConfigDecode = """
     {
-       "password":"1234567890",
        "dryRun":false,
        "dateSeparator":"@",
        "dataset":"nas_12tb\\/nas",

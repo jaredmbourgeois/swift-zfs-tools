@@ -21,7 +21,7 @@ class SnapshotterTest: XCTestCase {
       commandHandlers: commandHandlers(config),
       actionHandler: { action in
         guard action.command == "zfs snapshot \(TestUtilities.datasetMatch)\(ZFSTools.Constants.snapshotDateSeparator)\(dateFormatter.string(from: TestUtilities.snapshotDate))" else { return }
-        print("TEST \(action.command)")
+        print("TEST: \(action.command)")
         expectation.fulfill()
       },
       dateFormatter: dateFormatter,
@@ -42,7 +42,7 @@ class SnapshotterTest: XCTestCase {
       commandHandlers: commandHandlers(config),
       actionHandler: { action in
         guard action.command == "zfs snapshot -r \(TestUtilities.datasetMatch)\(ZFSTools.Constants.snapshotDateSeparator)\(dateFormatter.string(from: TestUtilities.snapshotDate))" else { return }
-        print("TEST \(action.command)")
+        print("TEST: \(action.command)")
         expectation.fulfill()
       },
       dateFormatter: dateFormatter,
@@ -83,14 +83,12 @@ extension SnapshotterTest {
 extension SnapshotterTest {
   private func commandHandlers(_ config: ZFSTools.Action.Config.Snapshot) -> [MockShell.CommandHandler] {
     [
-      .sudo({ command, password in
-        guard password == config.password,
-              command.contains("zfs snapshot ") else { return nil }
+      .sudo({ command in
+        guard command.contains("zfs snapshot ") else { return nil }
         return .output("")
       }),
-      .sudo({ command, password in
-        guard password == config.password,
-              !command.contains("zfs snapshot ") else { return nil }
+      .sudo({ command in
+        guard !command.contains("zfs snapshot ") else { return nil }
         return .error("")
       })
     ]

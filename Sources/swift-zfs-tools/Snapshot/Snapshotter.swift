@@ -29,7 +29,7 @@ extension ZFSTools {
     public func snapshot() {
       _isSnapshotting.value = true
       Task(priority: .high) {
-        await shell.sudoOutput(snapshotCommand, password: config.password, dryRun: config.dryRun)
+        await shell.sudoOutput(snapshotCommand, dryRun: config.dryRun)
         _isSnapshotting.value = false
       }
     }

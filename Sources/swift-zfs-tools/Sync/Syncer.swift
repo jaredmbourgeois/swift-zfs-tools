@@ -121,7 +121,6 @@ extension ZFSTools.Syncer {
   private func sudoOutput(_ command: String) async -> String {
     await shell.sudoOutput(
       command,
-      password: config.password,
       dryRun: config.dryRun
     ) ?? ""
   }
@@ -130,7 +129,6 @@ extension ZFSTools.Syncer {
   private func sudoOutputLines(_ command: String) async -> [String] {
     await shell.sudoOutputLines(
       command,
-      password: config.password,
       dryRun: config.dryRun
     )
   }

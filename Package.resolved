@@ -23,8 +23,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/jaredmbourgeois/swift-shell",
       "state" : {
-        "revision" : "42f64683a059b7a74fdac10f16402a516378086c",
-        "version" : "1.0.5"
+        "revision" : "81d8576af648faac7bdd3790b7ad03b4c44eccf2",
+        "version" : "1.0.6"
       }
     }
   ],

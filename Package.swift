@@ -18,7 +18,7 @@ let package = Package(
     dependencies: [
         .package(
           url: "https://github.com/jaredmbourgeois/swift-shell",
-          from: "1.0.5"
+          from: "1.0.6"
         ),
         .package(
           url: "https://github.com/apple/swift-algorithms",

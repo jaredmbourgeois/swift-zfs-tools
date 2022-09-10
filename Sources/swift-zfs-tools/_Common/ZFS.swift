@@ -5,13 +5,12 @@ extension ShellExecutor {
   @discardableResult
   func sudoOutput(
     _ command: String,
-    password: String,
     dryRun: Bool,
     function: StaticString = #function
   ) async -> String? {
     print("DEBUG: Consolidator.\(function) command: \(command)")
     let command = !dryRun ? command : "echo \(command)"
-    let result = await sudo(command, password: password)
+    let result = await sudo(command)
     switch result {
     case .output(let output):
       print("DEBUG: Consolidator.\(function) result: .output(\(output))")
@@ -28,23 +27,20 @@ extension ShellExecutor {
   @discardableResult
   func sudoOutputLines(
     _ command: String,
-    password: String,
     dryRun: Bool,
     function: StaticString = #function
   ) async -> [String] {
-    (await sudoOutput(command, password: password, dryRun: dryRun, function: function))?.lines ?? []
+    (await sudoOutput(command, dryRun: dryRun, function: function))?.lines ?? []
   }
 }
 
 extension ShellExecutor {
   func zfsDatasets(
     matching: String? = nil,
-    password: String,
     function: StaticString = #function
   ) async -> [String] {
     await sudoOutputLines(
       ZFSTools.ZFSCommand.list(matching: matching),
-      password: password,
       dryRun: false,
       function: function
     )
@@ -52,24 +48,21 @@ extension ShellExecutor {
 
   func zfsDeleteSnapshots(
     _ snapshots: [String],
-    password: String,
     dryRun: Bool,
     function: StaticString = #function
   ) async {
     for snapshot in snapshots {
-      await zfsDestroy(snapshot, password: password, dryRun: dryRun, function: function)
+      await zfsDestroy(snapshot, dryRun: dryRun, function: function)
     }
   }
 
   func zfsDestroy(
     _ subject: String,
-    password: String,
     dryRun: Bool,
     function: StaticString = #function
   ) async {
     await sudoOutputLines(
       ZFSTools.ZFSCommand.destroy(subject),
-      password: password,
       dryRun: dryRun,
       function: function
     )
@@ -77,12 +70,10 @@ extension ShellExecutor {
 
   func zfsSnapshots(
     matching: String? = nil,
-    password: String,
     function: StaticString = #function
   ) async -> [String] {
     await sudoOutputLines(
       ZFSTools.ZFSCommand.listSnapshots(matching: matching),
-      password: password,
       dryRun: false,
       function: function
     )

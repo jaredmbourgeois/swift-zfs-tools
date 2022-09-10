@@ -1,8 +1,7 @@
 {
-  "password": "1234567890",
   "snapshotsNotConsolidated": [],
   "consolidatePeriod": {
-    "upperBound": 681109200,
+    "upperBound": "20220802-000000",
     "snapshotPeriodBias": {
       "upperBound": {}
     },

@@ -7,12 +7,22 @@ class TestUtilities {
   private init() { }
 
   static let datasetMatch = "nas_12tb/nas"
-  static let password = "1234567890"
 
   static let timeout = TimeInterval(120)
 
+  static let testDateFormatter: DateFormatter = {
+    let dateFormatter = DateFormatter()
+    dateFormatter.timeZone = .current
+    dateFormatter.dateFormat = ZFSTools.Constants.snapshotDateFormat
+    return dateFormatter
+  }()
+
+  static let testDate = Date.now
+  static let testDateString: String = testDateFormatter.string(from: testDate)
+
   /// August 2, 2022
-  static let upperBound = Date(timeIntervalSince1970: TimeInterval(upperBoundSecondsSince1970))
+  static let upperBound = "20220802-000000"
+  static let upperBoundDate = Date(timeIntervalSince1970: TimeInterval(upperBoundSecondsSince1970))
   static let upperBoundSecondsSince1970 = 1659416400
 
   static let defaultConfig = ZFSTools.Config(
@@ -56,7 +66,7 @@ extension TestUtilities {
       }
       date = calendar.date(byAdding: .day, value: -1, to: date)!
     }
-    print("TEST \n\tconfig: \(config)\n\tsnapshots: \(snapshots)")
+    print("TEST: \n\tconfig: \(config)\n\tsnapshots: \(snapshots)")
     return snapshots
   }
 
@@ -87,7 +97,6 @@ extension TestUtilities {
     .build()
 
   static func consolidateConfig(
-    password: String = TestUtilities.password,
     datasetMatch: String = TestUtilities.datasetMatch,
     snapshotDateSeperator: String = ZFSTools.Constants.snapshotDateSeparator,
     snapshotsNotConsolidated: [String] = [],
@@ -95,7 +104,6 @@ extension TestUtilities {
     dryRun: Bool = false
   ) -> ZFSTools.Action.Config.Consolidate {
     ZFSTools.Action.Config.Consolidate(
-      password: password,
       datasetMatch: datasetMatch,
       snapshotDateSeparator: snapshotDateSeperator,
       snapshotsNotConsolidated: snapshotsNotConsolidated,
@@ -107,7 +115,7 @@ extension TestUtilities {
   static func consolidatePeriodDays(
     _ days: UInt16 = 1,
     snapshots: UInt16 = 365,
-    upperBound: Date = upperBound
+    upperBound: String = upperBound
   ) -> ZFSTools.Consolidator.ConsolidatePeriod {
     ZFSTools.Consolidator.ConsolidatePeriod.ConsolidatePeriodBuilder(upperBound: upperBound)
       .snapshotPeriod(snapshots: snapshots)
@@ -119,7 +127,7 @@ extension TestUtilities {
   static func consolidatePeriodWeeks(
     _ weeksOfYear: UInt16 = 1,
     snapshots: UInt16 = 365,
-    upperBound: Date = upperBound
+    upperBound: String = upperBound
   ) -> ZFSTools.Consolidator.ConsolidatePeriod {
     ZFSTools.Consolidator.ConsolidatePeriod.ConsolidatePeriodBuilder(upperBound: upperBound)
       .snapshotPeriod(snapshots: snapshots)
@@ -131,20 +139,18 @@ extension TestUtilities {
 
 // MARK: Snapshot
 extension TestUtilities {
-  static let snapshotDate = upperBound
+  static let snapshotDate = upperBoundDate
 
   static func snapshotConfig(
     dataset: String = datasetMatch,
     recursive: Bool = true,
     dateSeparator: String = ZFSTools.Constants.snapshotDateSeparator,
-    password: String = password,
     dryRun: Bool = false
   ) -> ZFSTools.Action.Config.Snapshot {
     .init(
       dataset: dataset,
       recursive: recursive,
       dateSeparator: dateSeparator,
-      password: password,
       dryRun: dryRun
     )
   }
@@ -158,13 +164,11 @@ extension TestUtilities {
   static func syncConfig(
     dataset: String = datasetMatch,
     dateSeparator: String = ZFSTools.Constants.snapshotDateSeparator,
-    password: String = password,
     sshKeyPath: String = sshKeyPath,
     sshIP: String = sshIP,
     dryRun: Bool = false
   ) -> ZFSTools.Action.Config.Sync {
     .init(
-      password: password,
       datasetMatch: dataset,
       snapshotDateSeparator: dateSeparator,
       sshKeyPath: sshKeyPath,

@@ -42,7 +42,7 @@ class SyncerTest: XCTestCase {
 
     let setup = setup(
       actionHandler: { action in
-        print("TEST \(action.command)")
+        print("TEST: \(action.command)")
         handleDeleteSnapshotCommand(action.command)
         handleSendSnapshotCommand(action.command)
       },
@@ -113,15 +113,13 @@ extension SyncerTest {
     let sshLogin = "ssh -i \(config.sshKeyPath) \(config.sshIP)"
     return [
       // zfsCommandDestroyRemote
-      .sudo({ command, password in
-        guard password == config.password,
-              command.contains("\(sshLogin) \(ZFSTools.ZFSCommand.destroy(""))") else { return nil }
+      .sudo({ command in
+        guard command.contains("\(sshLogin) \(ZFSTools.ZFSCommand.destroy(""))") else { return nil }
         return .output("")
       }),
       // zfsCommandListLocal
-      .sudo({ command, password in
-        guard password == config.password,
-              command.contains(ZFSTools.ZFSCommand.list(matching: config.datasetMatch)) else { return nil }
+      .sudo({ command in
+        guard command.contains(ZFSTools.ZFSCommand.list(matching: config.datasetMatch)) else { return nil }
         var output = listLocal.lines
         if let datasetMatch = config.datasetMatch {
           let split = command.splitXP(by: " | grep \(datasetMatch)")
@@ -136,9 +134,8 @@ extension SyncerTest {
         return .output(output.joined(separator: TestUtilities.line()))
       }),
       // zfsCommandListRemote
-      .sudo({ command, password in
-        guard password == config.password,
-              command.contains("\(sshLogin) \(ZFSTools.ZFSCommand.list(matching: config.datasetMatch))") else { return nil }
+      .sudo({ command in
+        guard command.contains("\(sshLogin) \(ZFSTools.ZFSCommand.list(matching: config.datasetMatch))") else { return nil }
         var output = listRemote.lines
         if let datasetMatch = config.datasetMatch {
           let split = command.splitXP(by: " | grep \(datasetMatch)")
@@ -153,9 +150,8 @@ extension SyncerTest {
         return .output(output.joined(separator: TestUtilities.line()))
       }),
       // zfsCommandListSnapshotsLocal
-      .sudo({ command, password in
-        guard password == config.password,
-              command == ZFSTools.ZFSCommand.listSnapshots(matching: config.datasetMatch) else { return nil }
+      .sudo({ command in
+        guard command == ZFSTools.ZFSCommand.listSnapshots(matching: config.datasetMatch) else { return nil }
         var output = snapshotsLocal.lines
         if let datasetMatch = config.datasetMatch {
           let split = command.splitXP(by: " | grep \(datasetMatch)")
@@ -170,9 +166,8 @@ extension SyncerTest {
         return .output(output.joined(separator: TestUtilities.line()))
       }),
       // zfsCommandListSnapshotsRemote
-      .sudo({ command, password in
-        guard password == config.password,
-              command == "\(sshLogin) \(ZFSTools.ZFSCommand.listSnapshots(matching: config.datasetMatch))" else { return nil }
+      .sudo({ command in
+        guard command == "\(sshLogin) \(ZFSTools.ZFSCommand.listSnapshots(matching: config.datasetMatch))" else { return nil }
         var output = snapshotsRemote.lines
         if let datasetMatch = config.datasetMatch {
           let split = command.splitXP(by: " | grep \(datasetMatch)")
@@ -187,9 +182,8 @@ extension SyncerTest {
         return .output(output.joined(separator: TestUtilities.line()))
       }),
       // zfsCommandSend
-      .sudo({ command, password in
-        guard password == config.password,
-              command.contains("zfs send") else { return nil }
+      .sudo({ command in
+        guard command.contains("zfs send") else { return nil }
         return .output("")
       })
     ]
