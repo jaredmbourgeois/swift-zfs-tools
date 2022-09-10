@@ -149,7 +149,7 @@ extension ZFSTools.Syncer {
     return command
   }
 
-  private func zfsListRemote(matching: String?) -> String {
+  private func zfsCommandListRemote(matching: String?) -> String {
     "\(sshLogin) \(zfsCommandListLocal(matching: matching))"
   }
 
@@ -170,7 +170,7 @@ extension ZFSTools.Syncer {
     if let previousSnapshot = send.previous {
       command += " -i \(previousSnapshot.snapshot)"
     }
-    command += " \(send.this) | \(sshLogin) zfs recv -F \(send.this)"
+    command += " \(send.this.snapshot) | \(sshLogin) zfs recv -F \(send.this.snapshot)"
     return command
   }
 }

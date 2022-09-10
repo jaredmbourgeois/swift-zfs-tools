@@ -2,11 +2,6 @@ import Foundation
 import Shell
 
 extension Array {
-  public func optional(at index: Self.Index) -> Element? {
-    guard indices.contains(index) else { return nil }
-    return self[index]
-  }
-
   public func mapIndex<T>(_ map: (Int, Element) -> T) -> [T] {
     var index = 0
     return self.map {
@@ -14,6 +9,11 @@ extension Array {
       index += 1
       return value
     }
+  }
+
+  public func optional(at index: Self.Index) -> Element? {
+    guard indices.contains(index) else { return nil }
+    return self[index]
   }
 }
 

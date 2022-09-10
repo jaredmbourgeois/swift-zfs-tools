@@ -31,7 +31,7 @@ class SyncConfigTest: XCTestCase {
 extension SyncConfigTest {
   static let defaultConfig = TestUtilities.syncConfig()
 
-  static let defaultConfigEncode = "{\"password\":\"1234567890\",\"dryRun\":false,\"snapshotDateSeparator\":\"@\",\"datasetMatch\":\"nas_12tb\\/nas\",\"sshKeyPath\":\"key.rsa\",\"sshIP\":\"123.456.789.0\"}"
+  static let defaultConfigEncode = "{\"password\":\"1234567890\",\"dryRun\":false,\"snapshotDateSeparator\":\"@\",\"datasetMatch\":\"nas_12tb\\/nas\",\"sshKeyPath\":\"sshKeyPath\",\"sshIP\":\"sshIP\"}"
 
   static let defaultConfigDecode = """
     {
@@ -39,8 +39,8 @@ extension SyncConfigTest {
       "dryRun": false,
       "snapshotDateSeparator": "@",
       "datasetMatch": "nas_12tb\\/nas",
-      "sshKeyPath": "key.rsa",
-      "sshIP": "123.456.789.0"
+      "sshKeyPath": "sshKeyPath",
+      "sshIP": "sshIP"
     }
     """
 }

@@ -152,20 +152,24 @@ extension TestUtilities {
 
 // MARK: Sync
 extension TestUtilities {
+  static let sshKeyPath = "sshKeyPath"
+  static let sshIP = "sshIP"
+
   static func syncConfig(
     dataset: String = datasetMatch,
-    recursive: Bool = true,
     dateSeparator: String = ZFSTools.Constants.snapshotDateSeparator,
     password: String = password,
+    sshKeyPath: String = sshKeyPath,
+    sshIP: String = sshIP,
     dryRun: Bool = false
   ) -> ZFSTools.Action.Config.Sync {
     .init(
       password: password,
       datasetMatch: dataset,
       snapshotDateSeparator: dateSeparator,
-      sshKeyPath: "key.rsa",
-      sshIP: "123.456.789.0",
-      dryRun: false
+      sshKeyPath: sshKeyPath,
+      sshIP: sshIP,
+      dryRun: dryRun
     )
   }
 }
