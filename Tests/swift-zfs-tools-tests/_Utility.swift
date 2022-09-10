@@ -17,7 +17,7 @@ class TestUtilities {
     return dateFormatter
   }()
 
-  static let testDate = Date.now
+  static let testDate = Date()
   static let testDateString: String = testDateFormatter.string(from: testDate)
 
   /// August 2, 2022
@@ -158,20 +158,26 @@ extension TestUtilities {
 
 // MARK: Sync
 extension TestUtilities {
+  static let sshPort = "sshPort"
   static let sshKeyPath = "sshKeyPath"
+  static let sshUser = "sshUser"
   static let sshIP = "sshIP"
 
   static func syncConfig(
     dataset: String = datasetMatch,
     dateSeparator: String = ZFSTools.Constants.snapshotDateSeparator,
+    sshPort: String = sshPort,
     sshKeyPath: String = sshKeyPath,
+    sshUser: String = sshUser,
     sshIP: String = sshIP,
     dryRun: Bool = false
   ) -> ZFSTools.Action.Config.Sync {
     .init(
       datasetMatch: dataset,
       snapshotDateSeparator: dateSeparator,
+      sshPort: sshPort,
       sshKeyPath: sshKeyPath,
+      sshUser: sshUser,
       sshIP: sshIP,
       dryRun: dryRun
     )

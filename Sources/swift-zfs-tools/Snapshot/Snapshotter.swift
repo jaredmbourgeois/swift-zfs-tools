@@ -13,7 +13,7 @@ extension ZFSTools {
     public init(
       shell: ShellExecutor,
       config: ZFSTools.Action.Config.Snapshot,
-      date: @escaping () -> Date = { .now },
+      date: @escaping () -> Date = { Date() },
       dateFormatter: DateFormatter,
       snapshotNow: Bool
     ) {

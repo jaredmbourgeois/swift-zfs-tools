@@ -21,7 +21,7 @@ extension ZFSTools {
       self.shell = shell
       self.config = config
       self.dateFormatter = dateFormatter
-      sshLogin = "ssh -i \(config.sshKeyPath) \(config.sshIP)"
+      sshLogin = "ssh -p \(config.sshPort) -i \(config.sshKeyPath) \(config.sshUser)@\(config.sshIP)"
       _isSyncing = .init(syncNow)
       guard syncNow else { return }
       sync()

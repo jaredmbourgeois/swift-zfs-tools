@@ -21,7 +21,7 @@ class SyncerTest: XCTestCase {
     var snapshotsToDelete = Self.zfsSnapshotsDeleted
     func handleDeleteSnapshotCommand(_ string: String) {
       for snapshotToDelete in snapshotsToDelete {
-        guard string == "\(config.sshLogin) zfs destroy \(snapshotToDelete)" else { continue }
+        guard string == "\(config.sshLoginTest) zfs destroy \(snapshotToDelete)" else { continue }
         snapshotsToDelete.removeAll(where: { $0 == snapshotToDelete })
         guard snapshotsToDelete.isEmpty else { continue }
         expectationDelete.fulfill()
@@ -32,8 +32,8 @@ class SyncerTest: XCTestCase {
     var snapshotsToSend = Self.zfsSnapshotsSent
     func handleSendSnapshotCommand(_ string: String) {
       for snapshotToSend in snapshotsToSend {
-        guard string == "zfs send -i nas_12tb/nas/documents@20220805-000000 nas_12tb/nas/documents@20220806-000000 | \(config.sshLogin) zfs recv -F nas_12tb/nas/documents@20220806-000000" ||
-              string == "zfs send -i nas_12tb/nas/documents@20220806-000000 nas_12tb/nas/documents@20220807-000000 | \(config.sshLogin) zfs recv -F nas_12tb/nas/documents@20220807-000000" else { continue }
+        guard string == "zfs send -i nas_12tb/nas/documents@20220805-000000 nas_12tb/nas/documents@20220806-000000 | \(config.sshLoginTest) zfs recv -F nas_12tb/nas/documents@20220806-000000" ||
+              string == "zfs send -i nas_12tb/nas/documents@20220806-000000 nas_12tb/nas/documents@20220807-000000 | \(config.sshLoginTest) zfs recv -F nas_12tb/nas/documents@20220807-000000" else { continue }
         snapshotsToSend.removeAll(where: { $0 == snapshotToSend })
         guard snapshotsToSend.isEmpty else { continue }
         expectationSend.fulfill()
@@ -62,8 +62,8 @@ class SyncerTest: XCTestCase {
 }
 
 private extension ZFSTools.Action.Config.Sync {
-  var sshLogin: String {
-    "ssh -i \(sshKeyPath) \(sshIP)"
+  var sshLoginTest: String {
+    "ssh -p \(sshPort) -i \(sshKeyPath) \(sshUser)@\(sshIP)"
   }
 }
 
@@ -110,11 +110,10 @@ extension SyncerTest {
     snapshotsLocal: String,
     snapshotsRemote: String
   ) -> [MockShell.CommandHandler] {
-    let sshLogin = "ssh -i \(config.sshKeyPath) \(config.sshIP)"
     return [
       // zfsCommandDestroyRemote
       .sudo({ command in
-        guard command.contains("\(sshLogin) \(ZFSTools.ZFSCommand.destroy(""))") else { return nil }
+        guard command.contains("\(config.sshLoginTest) \(ZFSTools.ZFSCommand.destroy(""))") else { return nil }
         return .output("")
       }),
       // zfsCommandListLocal
@@ -135,7 +134,7 @@ extension SyncerTest {
       }),
       // zfsCommandListRemote
       .sudo({ command in
-        guard command.contains("\(sshLogin) \(ZFSTools.ZFSCommand.list(matching: config.datasetMatch))") else { return nil }
+        guard command.contains("\(config.sshLoginTest) \(ZFSTools.ZFSCommand.list(matching: config.datasetMatch))") else { return nil }
         var output = listRemote.lines
         if let datasetMatch = config.datasetMatch {
           let split = command.splitXP(by: " | grep \(datasetMatch)")
@@ -167,7 +166,7 @@ extension SyncerTest {
       }),
       // zfsCommandListSnapshotsRemote
       .sudo({ command in
-        guard command == "\(sshLogin) \(ZFSTools.ZFSCommand.listSnapshots(matching: config.datasetMatch))" else { return nil }
+        guard command == "\(config.sshLoginTest) \(ZFSTools.ZFSCommand.listSnapshots(matching: config.datasetMatch))" else { return nil }
         var output = snapshotsRemote.lines
         if let datasetMatch = config.datasetMatch {
           let split = command.splitXP(by: " | grep \(datasetMatch)")
