@@ -35,9 +35,10 @@ class TestUtilities {
   )
 
   static func decodedJSON<T: Decodable>(fileName: String, fileManager: FileManager = .default) -> T {
-//    // TODO: Update this path for your machine
-    let path = "/Users/jared/Projects/swift-zfs-tools/Tests/swift-zfs-tools-tests/_resources/\(fileName).json"
-    let contents = fileManager.contents(atPath: path)!
+    let thisFile = URL(string: #file)!
+    let thisDirectory = thisFile.deletingLastPathComponent()
+    let resourceURL = thisDirectory.appendingPathComponent("_resources/\(fileName).json")
+    let contents = fileManager.contents(atPath: resourceURL.absoluteString)!
     return try! JSONDecoder().decode(T.self, from: contents)
   }
 }

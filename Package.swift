@@ -11,14 +11,14 @@ let package = Package(
   ],
   products: [
     .executable(
-      name: "swift-zfs-tools",
+      name: "ZFSTools",
       targets: ["swift-zfs-tools"]
     )
   ],
   dependencies: [
     .package(
       url: "https://github.com/jaredmbourgeois/swift-shell",
-      from: "1.0.7"
+      from: "1.0.8"
     ),
     .package(
       url: "https://github.com/apple/swift-algorithms",
@@ -35,7 +35,10 @@ let package = Package(
     ),
     .testTarget(
         name: "swift-zfs-tools-tests",
-        dependencies: ["swift-zfs-tools"]
+        dependencies: ["swift-zfs-tools"],
+        resources: [
+          .copy("_resources")
+        ]
     )
   ]
 )

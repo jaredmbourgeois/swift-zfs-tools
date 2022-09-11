@@ -8,19 +8,12 @@ extension ShellExecutor {
     dryRun: Bool,
     function: StaticString = #function
   ) async -> String? {
-    print("DEBUG: Consolidator.\(function) command: \(command)")
     let command = !dryRun ? command : "echo \(command)"
     let result = await sudo(command)
     switch result {
-    case .output(let output):
-      print("DEBUG: Consolidator.\(function) result: .output(\(output))")
-      return output
-    case .error(let error):
-      print("DEBUG: Consolidator.\(function) result: .error(\(error))")
-      return nil
-    case .failure:
-      print("DEBUG: Consolidator.\(function) result: .failure")
-      return nil
+    case .output(let output): return output
+    case .error: return nil
+    case .failure: return nil
     }
   }
 
