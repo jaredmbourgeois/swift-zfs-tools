@@ -10,7 +10,7 @@ let package = Package(
       .custom("Ubuntu", versionString: "18.0.4")
     ],
     products: [
-        .library(
+        .executable(
             name: "swift-zfs-tools",
             targets: ["swift-zfs-tools"]
         )
