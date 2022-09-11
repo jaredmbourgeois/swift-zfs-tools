@@ -2,12 +2,12 @@ import Foundation
 
 extension ZFSTools.Consolidator {
   public struct ConsolidatePeriod: ZFSTools.Model {
-    public let upperBound: String
+    public let upperBound: String?
     public let snapshotPeriods: ZFSTools.Consolidator.SnapshotPeriods
     public let snapshotPeriodBias: ZFSTools.Consolidator.SnapshotPeriod.Bias
 
     fileprivate init(
-      upperBound: String,
+      upperBound: String?,
       snapshotPeriods: ZFSTools.Consolidator.SnapshotPeriods,
       snapshotPeriodBias: ZFSTools.Consolidator.SnapshotPeriod.Bias
     ) {
@@ -22,7 +22,11 @@ extension ZFSTools.Consolidator {
       snapshotPeriodBias: ZFSTools.Consolidator.SnapshotPeriod.Bias,
       snapshotAndDates: [SnapshotAndDate]
     ) -> [SnapshotPeriodRangeSnapshotAndDates] {
-      guard var upperBound = dateFormatter.date(from: upperBound) else { return [] }
+      var upperBound = Date()
+      if let upperBoundInput = self.upperBound,
+         let upperBoundInputDate = dateFormatter.date(from: upperBoundInput) {
+        upperBound = upperBoundInputDate
+      }
       return snapshotPeriods.flatMap { snapshotPeriod in
         (0..<snapshotPeriod.snapshots).compactMap { _ in
           let range = snapshotPeriod.range(upperBound: upperBound, calendar: calendar)
@@ -68,7 +72,7 @@ extension ZFSTools.Consolidator.ConsolidatePeriod {
 
 extension ZFSTools.Consolidator.ConsolidatePeriod {
   public class ConsolidatePeriodBuilder {
-    private let upperBound: String
+    private let upperBound: String?
     private let snapshotPeriodBias: ZFSTools.Consolidator.SnapshotPeriod.Bias
 
     private var snapshotPeriods = ZFSTools.Consolidator.SnapshotPeriods()
@@ -76,7 +80,7 @@ extension ZFSTools.Consolidator.ConsolidatePeriod {
 
     /// snapshotPeriodBias used when multiple snapshots are in a period to prioritize keeping snapshot that's closest to the upper or lower bound of that period range
     public init(
-      upperBound: String,
+      upperBound: String? = nil,
       snapshotPeriodBias: ZFSTools.Consolidator.SnapshotPeriod.Bias = .upperBound
     ) {
       self.upperBound = upperBound
