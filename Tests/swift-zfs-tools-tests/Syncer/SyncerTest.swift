@@ -19,7 +19,11 @@ class SyncerTest: XCTestCase {
 
     let expectationDelete = expectation(description: "expectationDelete-\(UUID().uuidString)")
     var snapshotsToDelete = Self.zfsSnapshotsDeleted
+    var snapshotsDeleted = 0
     func handleDeleteSnapshotCommand(_ string: String) {
+      if string.starts(with: "\(config.sshLoginTest) zfs destroy ") {
+        snapshotsDeleted += 1
+      }
       for snapshotToDelete in snapshotsToDelete {
         guard string == "\(config.sshLoginTest) zfs destroy \(snapshotToDelete)" else { continue }
         snapshotsToDelete.removeAll(where: { $0 == snapshotToDelete })
@@ -27,10 +31,17 @@ class SyncerTest: XCTestCase {
         expectationDelete.fulfill()
       }
     }
+    if snapshotsToDelete.count == 0 {
+      expectationDelete.fulfill()
+    }
 
     let expectationSend = expectation(description: "expectationSend-\(UUID().uuidString)")
     var snapshotsToSend = Self.zfsSnapshotsSent
+    var snapshotsSent = 0
     func handleSendSnapshotCommand(_ string: String) {
+      if string.starts(with: "zfs send -i") {
+        snapshotsSent += 1
+      }
       for snapshotToSend in snapshotsToSend {
         guard string == "zfs send -i nas_12tb/nas/documents@20220805-000000 nas_12tb/nas/documents@20220806-000000 | \(config.sshLoginTest) zfs recv -F nas_12tb/nas/documents@20220806-000000" ||
               string == "zfs send -i nas_12tb/nas/documents@20220806-000000 nas_12tb/nas/documents@20220807-000000 | \(config.sshLoginTest) zfs recv -F nas_12tb/nas/documents@20220807-000000" else { continue }
@@ -58,6 +69,200 @@ class SyncerTest: XCTestCase {
       timeout: TestUtilities.timeout
     )
     XCTAssertFalse(setup.syncer.isSyncing)
+    XCTAssertEqual(Self.zfsSnapshotsDeleted.count, snapshotsDeleted)
+    XCTAssertEqual(Self.zfsSnapshotsSent.count, snapshotsSent)
+  }
+
+  func testSyncOnlyFutureAreSent() {
+    let config = TestUtilities.syncConfig()
+    let dateFormatter = DateFormatter()
+    dateFormatter.calendar = calendar
+    dateFormatter.timeZone = calendar.timeZone
+
+    let expectationDelete = expectation(description: "expectationDelete-\(UUID().uuidString)")
+    var snapshotsToDelete = Self.zfsSnapshotsOnlyFutureDeleted
+    var snapshotsDeleted = 0
+    func handleDeleteSnapshotCommand(_ string: String) {
+      if string.starts(with: "\(config.sshLoginTest) zfs destroy ") {
+        snapshotsDeleted += 1
+      }
+      for snapshotToDelete in snapshotsToDelete {
+        guard string == "\(config.sshLoginTest) zfs destroy \(snapshotToDelete)" else { continue }
+        snapshotsToDelete.removeAll(where: { $0 == snapshotToDelete })
+        guard snapshotsToDelete.isEmpty else { continue }
+        expectationDelete.fulfill()
+      }
+    }
+    if snapshotsToDelete.count == 0 {
+      expectationDelete.fulfill()
+    }
+
+    let expectationSend = expectation(description: "expectationSend-\(UUID().uuidString)")
+    var snapshotsToSend = Self.zfsSnapshotsOnlyFutureSent
+    var snapshotsSent = 0
+    func handleSendSnapshotCommand(_ string: String) {
+      if string.starts(with: "zfs send") {
+        snapshotsSent += 1
+      }
+      for snapshotToSend in snapshotsToSend {
+        guard string == "zfs send -i nas_12tb/nas/documents@20220805-000000 nas_12tb/nas/documents@20220806-000000 | \(config.sshLoginTest) zfs recv -F nas_12tb/nas/documents@20220806-000000" ||
+              string == "zfs send -i nas_12tb/nas/documents@20220806-000000 nas_12tb/nas/documents@20220807-000000 | \(config.sshLoginTest) zfs recv -F nas_12tb/nas/documents@20220807-000000" else { continue }
+        snapshotsToSend.removeAll(where: { $0 == snapshotToSend })
+        guard snapshotsToSend.isEmpty else { continue }
+        expectationSend.fulfill()
+      }
+    }
+
+    let setup = setup(
+      actionHandler: { action in
+        print("TEST: \(action.command)")
+        handleDeleteSnapshotCommand(action.command)
+        handleSendSnapshotCommand(action.command)
+      },
+      dateFormatter: dateFormatter,
+      config: config,
+      snapshotsLocal: Self.zfsSnapshotsOnlyFutureLocal,
+      snapshotsRemote: Self.zfsSnapshotsOnlyFutureRemote
+    )
+    setup.syncer.sync()
+    wait(
+      for: [
+        expectationDelete,
+        expectationSend
+      ],
+      timeout: TestUtilities.timeout
+    )
+    XCTAssertFalse(setup.syncer.isSyncing)
+    XCTAssertEqual(Self.zfsSnapshotsOnlyFutureDeleted.count, snapshotsDeleted)
+    XCTAssertEqual(Self.zfsSnapshotsOnlyFutureSent.count, snapshotsSent)
+  }
+
+  func testSyncResetsIncremental() {
+    let config = TestUtilities.syncConfig()
+    let dateFormatter = DateFormatter()
+    dateFormatter.calendar = calendar
+    dateFormatter.timeZone = calendar.timeZone
+
+    let expectationDelete = expectation(description: "expectationDelete-\(UUID().uuidString)")
+    var snapshotsToDelete = Self.zfsSnapshotsResetsIncrementalDeleted
+    var snapshotsDeleted = 0
+    func handleDeleteSnapshotCommand(_ string: String) {
+      if string.starts(with: "\(config.sshLoginTest) zfs destroy ") {
+        snapshotsDeleted += 1
+      }
+      for snapshotToDelete in snapshotsToDelete {
+        guard string == "\(config.sshLoginTest) zfs destroy \(snapshotToDelete)" else { continue }
+        snapshotsToDelete.removeAll(where: { $0 == snapshotToDelete })
+        guard snapshotsToDelete.isEmpty else { continue }
+        expectationDelete.fulfill()
+      }
+    }
+    if snapshotsToDelete.count == 0 {
+      expectationDelete.fulfill()
+    }
+
+    let expectationSend = expectation(description: "expectationSend-\(UUID().uuidString)")
+    var snapshotsToSend = Self.zfsSnapshotsResetsIncrementalSent
+    var snapshotsSent = 0
+    func handleSendSnapshotCommand(_ string: String) {
+      if string.starts(with: "zfs send") {
+        snapshotsSent += 1
+      }
+      for snapshotToSend in snapshotsToSend {
+        guard string == "zfs send -i nas_12tb/nas/documents@20220803-000000 nas_12tb/nas/documents@20220806-000000 | \(config.sshLoginTest) zfs recv -F nas_12tb/nas/documents@20220806-000000" ||
+              string == "zfs send -i nas_12tb/nas/documents@20220806-000000 nas_12tb/nas/documents@20220807-000000 | \(config.sshLoginTest) zfs recv -F nas_12tb/nas/documents@20220807-000000" else { continue }
+        snapshotsToSend.removeAll(where: { $0 == snapshotToSend })
+        guard snapshotsToSend.isEmpty else { continue }
+        expectationSend.fulfill()
+      }
+    }
+
+    let setup = setup(
+      actionHandler: { action in
+        print("TEST: \(action.command)")
+        handleDeleteSnapshotCommand(action.command)
+        handleSendSnapshotCommand(action.command)
+      },
+      dateFormatter: dateFormatter,
+      config: config,
+      snapshotsLocal: Self.zfsSnapshotsResetsIncrementalLocal,
+      snapshotsRemote: Self.zfsSnapshotsResetsIncrementalRemote
+    )
+    setup.syncer.sync()
+    wait(
+      for: [
+        expectationDelete,
+        expectationSend
+      ],
+      timeout: TestUtilities.timeout
+    )
+    XCTAssertFalse(setup.syncer.isSyncing)
+    XCTAssertEqual(Self.zfsSnapshotsResetsIncrementalDeleted.count, snapshotsDeleted)
+    XCTAssertEqual(Self.zfsSnapshotsResetsIncrementalSent.count, snapshotsSent)
+  }
+
+  func testSyncTotalReset() {
+    let config = TestUtilities.syncConfig()
+    let dateFormatter = DateFormatter()
+    dateFormatter.calendar = calendar
+    dateFormatter.timeZone = calendar.timeZone
+
+    let expectationDelete = expectation(description: "expectationDelete-\(UUID().uuidString)")
+    var snapshotsToDelete = Self.zfsSnapshotsTotalResetDeleted
+    var snapshotsDeleted = 0
+    func handleDeleteSnapshotCommand(_ string: String) {
+      if string.starts(with: "\(config.sshLoginTest) zfs destroy ") {
+        snapshotsDeleted += 1
+      }
+      for snapshotToDelete in snapshotsToDelete {
+        guard string == "\(config.sshLoginTest) zfs destroy \(snapshotToDelete)" else { continue }
+        snapshotsToDelete.removeAll(where: { $0 == snapshotToDelete })
+        guard snapshotsToDelete.isEmpty else { continue }
+        expectationDelete.fulfill()
+      }
+    }
+    if snapshotsToDelete.count == 0 {
+      expectationDelete.fulfill()
+    }
+
+    let expectationSend = expectation(description: "expectationSend-\(UUID().uuidString)")
+    var snapshotsToSend = Self.zfsSnapshotsTotalResetSent
+    var snapshotsSent = 0
+    func handleSendSnapshotCommand(_ string: String) {
+      if string.starts(with: "zfs send") {
+        snapshotsSent += 1
+      }
+      for snapshotToSend in snapshotsToSend {
+        guard string == "zfs send nas_12tb/nas/documents@20220806-000000 | \(config.sshLoginTest) zfs recv -F nas_12tb/nas/documents@20220806-000000" ||
+              string == "zfs send -i nas_12tb/nas/documents@20220806-000000 nas_12tb/nas/documents@20220807-000000 | \(config.sshLoginTest) zfs recv -F nas_12tb/nas/documents@20220807-000000" else { continue }
+        snapshotsToSend.removeAll(where: { $0 == snapshotToSend })
+        guard snapshotsToSend.isEmpty else { continue }
+        expectationSend.fulfill()
+      }
+    }
+
+    let setup = setup(
+      actionHandler: { action in
+        print("TEST: \(action.command)")
+        handleDeleteSnapshotCommand(action.command)
+        handleSendSnapshotCommand(action.command)
+      },
+      dateFormatter: dateFormatter,
+      config: config,
+      snapshotsLocal: Self.zfsSnapshotsTotalResetLocal,
+      snapshotsRemote: Self.zfsSnapshotsTotalResetRemote
+    )
+    setup.syncer.sync()
+    wait(
+      for: [
+        expectationDelete,
+        expectationSend
+      ],
+      timeout: TestUtilities.timeout
+    )
+    XCTAssertFalse(setup.syncer.isSyncing)
+    XCTAssertEqual(Self.zfsSnapshotsTotalResetDeleted.count, snapshotsDeleted)
+    XCTAssertEqual(Self.zfsSnapshotsTotalResetSent.count, snapshotsSent)
   }
 }
 
@@ -213,6 +418,78 @@ extension SyncerTest {
   ]
 
   private static let zfsSnapshotsSent = [
+    "nas_12tb/nas/documents@20220807-000000",
+    "nas_12tb/nas/documents@20220806-000000"
+  ]
+}
+
+extension SyncerTest {
+  private static let zfsSnapshotsOnlyFutureLocal = """
+    nas_12tb/nas/documents@20220807-000000
+    nas_12tb/nas/documents@20220806-000000
+    nas_12tb/nas/documents@20220805-000000
+    nas_12tb/nas/documents@20220803-000000
+    nas_12tb/nas/documents@20220801-000000
+    """
+  private static let zfsSnapshotsOnlyFutureRemote = """
+    nas_12tb/nas/documents@20220805-000000
+    nas_12tb/nas/documents@20220801-000000
+    """
+  private static let zfsSnapshotsOnlyFutureDeleted = [String]()
+
+  private static let zfsSnapshotsOnlyFutureSent = [
+    "nas_12tb/nas/documents@20220807-000000",
+    "nas_12tb/nas/documents@20220806-000000"
+  ]
+}
+
+extension SyncerTest {
+  private static let zfsSnapshotsResetsIncrementalLocal = """
+    nas_12tb/nas/documents@20220807-000000
+    nas_12tb/nas/documents@20220806-000000
+    nas_12tb/nas/documents@20220803-000000
+    nas_12tb/nas/documents@20220801-000000
+    """
+  private static let zfsSnapshotsResetsIncrementalRemote = """
+    nas_12tb/nas/documents@20220805-000000
+    nas_12tb/nas/documents@20220804-000000
+    nas_12tb/nas/documents@20220803-000000
+    nas_12tb/nas/documents@20220802-000000
+    nas_12tb/nas/documents@20220801-000000
+    """
+  private static let zfsSnapshotsResetsIncrementalDeleted = [
+    "nas_12tb/nas/documents@20220805-000000",
+    "nas_12tb/nas/documents@20220804-000000",
+    "nas_12tb/nas/documents@20220802-000000"
+  ]
+
+  private static let zfsSnapshotsResetsIncrementalSent = [
+    "nas_12tb/nas/documents@20220807-000000",
+    "nas_12tb/nas/documents@20220806-000000"
+  ]
+}
+
+extension SyncerTest {
+  private static let zfsSnapshotsTotalResetLocal = """
+    nas_12tb/nas/documents@20220807-000000
+    nas_12tb/nas/documents@20220806-000000
+    """
+  private static let zfsSnapshotsTotalResetRemote = """
+    nas_12tb/nas/documents@20220805-000000
+    nas_12tb/nas/documents@20220804-000000
+    nas_12tb/nas/documents@20220803-000000
+    nas_12tb/nas/documents@20220802-000000
+    nas_12tb/nas/documents@20220801-000000
+    """
+  private static let zfsSnapshotsTotalResetDeleted = [
+    "nas_12tb/nas/documents@20220805-000000",
+    "nas_12tb/nas/documents@20220804-000000",
+    "nas_12tb/nas/documents@20220803-000000",
+    "nas_12tb/nas/documents@20220802-000000",
+    "nas_12tb/nas/documents@20220801-000000"
+  ]
+
+  private static let zfsSnapshotsTotalResetSent = [
     "nas_12tb/nas/documents@20220807-000000",
     "nas_12tb/nas/documents@20220806-000000"
   ]

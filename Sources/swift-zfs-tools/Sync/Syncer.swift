@@ -48,13 +48,24 @@ extension ZFSTools {
     private func sendSnapshots(_ datasets: [Dataset]) async {
       for dataset in datasets {
         for send in sendsForDataset(dataset) {
+          for destroy in send.destroy {
+            await sudoOutput(zfsCommandDestroyRemote(destroy.snapshot))
+          }
           await sudoOutput(zfsCommandSend(send))
         }
       }
     }
 
+    private func snapshotsSortedByAscendingDate(_ snapshots: [Snapshot]) -> [Snapshot] {
+      snapshots.sorted(by: { $0.date < $1.date })
+    }
+
     private func sendsForDataset(_ dataset: Dataset) -> [Send] {
       guard !dataset.snapshotsCreated.isEmpty else { return [] }
+      let commonSnapshots = (dataset.snapshotsLocal + dataset.snapshotsRemote)
+        .uniqued()
+        .sorted(by: { $0.date < $1.date })
+      var destroy = [Snapshot]()
       var created = dataset.snapshotsCreated[0]
       var createdIndexInLocal: Int?
       var createdPrevious: Snapshot?
@@ -66,9 +77,27 @@ extension ZFSTools {
           createdPrevious = dataset.snapshotsCreated[index - 1]
         } else if let createdIndexInLocal = createdIndexInLocal,
                   dataset.snapshotsLocal.indices.contains(createdIndexInLocal - 1) {
-          createdPrevious = dataset.snapshotsLocal[createdIndexInLocal]
+          let previousLocal = dataset.snapshotsLocal[createdIndexInLocal]
+          createdPrevious = previousLocal
+          if !commonSnapshots.contains(where: { $0 == previousLocal }) {
+            let snapshotsBeforeLocal = commonSnapshots.filter({ $0.date > previousLocal.date })
+            if let lastCommon = snapshotsBeforeLocal.last {
+              createdPrevious = lastCommon
+              // destroy snapshots after lastCommon since the last incremental is being set to an earlier snapshot
+              destroy.append(
+                contentsOf: dataset.snapshotsRemote.filter({ $0.date > lastCommon.date })
+              )
+            } else {
+              // destroy all remote snapshots since they will be orphaned when we do a full send
+              destroy.append(contentsOf: dataset.snapshotsRemote)
+            }
+          }
         }
-        return .init(this: created, previous: createdPrevious)
+        return .init(
+          this: created,
+          previous: createdPrevious,
+          destroy: destroy
+        )
       }
     }
 
@@ -88,9 +117,6 @@ extension ZFSTools {
               let date = dateFormatter.date(from: split[1]) else { return nil }
         return Snapshot(snapshot: $0, dataset: split[0], date: date)
       }
-      func sortedByDate(_ snapshots: [Snapshot]) -> [Snapshot] {
-        snapshots.sorted(by: { $0.date < $1.date })
-      }
       var datasets = [Dataset]()
       var datasetSnapshotsLocal: [Snapshot]
       var datasetSnapshotsRemote: [Snapshot]
@@ -98,16 +124,25 @@ extension ZFSTools {
       var datasetSnapshotsCreated: [Snapshot]
       var dataset: Dataset
       for datasetString in (await datasetsLocal) {
-        datasetSnapshotsLocal = snapshotsLocal.filter { $0.dataset == datasetString }
-        datasetSnapshotsRemote = snapshotsRemote.filter { $0.dataset == datasetString }
-        datasetSnapshotsDeleted = datasetSnapshotsRemote.filter { !datasetSnapshotsLocal.contains($0) }
-        datasetSnapshotsCreated = datasetSnapshotsLocal.filter { !datasetSnapshotsRemote.contains($0) }
+        datasetSnapshotsLocal = snapshotsSortedByAscendingDate(snapshotsLocal.filter({ $0.dataset == datasetString }))
+        datasetSnapshotsRemote = snapshotsSortedByAscendingDate(snapshotsRemote.filter({ $0.dataset == datasetString }))
+        datasetSnapshotsDeleted = snapshotsSortedByAscendingDate(datasetSnapshotsRemote.filter({ !datasetSnapshotsLocal.contains($0) }))
+        datasetSnapshotsCreated = snapshotsSortedByAscendingDate(datasetSnapshotsLocal.filter({
+          let notInRemote = !datasetSnapshotsRemote.contains($0)
+          var inFuture = false
+          if let lastRemote = datasetSnapshotsRemote.last {
+            inFuture = $0.date > lastRemote.date
+          } else if datasetSnapshotsRemote.isEmpty {
+            inFuture = true
+          }
+          return notInRemote && inFuture
+        }))
         dataset = .init(
           dataset: datasetString,
-          snapshotsLocal: sortedByDate(datasetSnapshotsLocal),
-          snapshotsRemote: sortedByDate(datasetSnapshotsRemote),
-          snapshotsDeleted: sortedByDate(datasetSnapshotsDeleted),
-          snapshotsCreated: sortedByDate(datasetSnapshotsCreated)
+          snapshotsLocal: datasetSnapshotsLocal,
+          snapshotsRemote: datasetSnapshotsRemote,
+          snapshotsDeleted: datasetSnapshotsDeleted,
+          snapshotsCreated: datasetSnapshotsCreated
         )
         datasets.append(dataset)
       }
@@ -176,13 +211,17 @@ extension ZFSTools.Syncer {
 extension ZFSTools.Syncer {
   private struct Dataset: Equatable {
     let dataset: String
+    /// snapshotsLocal sorted by ascending Date
     let snapshotsLocal: [Snapshot]
+    /// snapshotsRemote sorted by ascending Date
     let snapshotsRemote: [Snapshot]
+    /// snapshotsDeleted sorted by ascending Date
     let snapshotsDeleted: [Snapshot]
+    /// snapshotsCreated sorted by ascending Date
     let snapshotsCreated: [Snapshot]
   }
 
-  private struct Snapshot: Equatable {
+  private struct Snapshot: Hashable {
     let snapshot: String
     let dataset: String
     let date: Date
@@ -191,5 +230,6 @@ extension ZFSTools.Syncer {
   private struct Send {
     let this: Snapshot
     let previous: Snapshot?
+    let destroy: [Snapshot]
   }
 }
