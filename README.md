@@ -20,3 +20,7 @@
 The core subcommands are `snapshot`, `consolidate`, and `sync`; the `execute-actions` subcommand runs a list of these core subcommands.
 
 Each subcommand has an associated `x-configure` subcommand that takes parameters and writes a json to the `output-path`.
+
+As mentioned in step 2 above, modify values in `swift-zfs-tools/sources/model/Defaults.swift` to change default values before compiling.
+
+Examples of config files can be found in `swift-zfs-tools/tests/resource`.

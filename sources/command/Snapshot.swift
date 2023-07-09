@@ -34,3 +34,26 @@ struct SnapshotConfigure: ParsableCommand {
     )
   }
 }
+
+struct SnapshotConfigured: AsyncParsableCommand {
+  @OptionGroup()
+  var arguments: Arguments.SnapshotConfigured
+
+  func run() async throws {
+    let config: Snapshotter.Config = try decodeFromJsonAtPath(
+      arguments.configPath,
+      fileManager: .default,
+      jsonDecoder: .init()
+    )
+    let dateFormatter = DateFormatter()
+    dateFormatter.calendar = .current
+    dateFormatter.dateFormat = arguments.common.dateFormat ?? Defaults.dateFormat
+    let snapshotter = Snapshotter(
+      shell: Shell.Executor(arguments: arguments.common),
+      config: config,
+      dateFormatter: dateFormatter,
+      date: { .now }
+    )
+    try await snapshotter.snapshot()
+  }
+}

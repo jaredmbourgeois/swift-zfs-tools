@@ -319,7 +319,7 @@ extension ConsolidatorTest {
   ) -> [MockShell.CommandHandler] {
     [
       .sudo({ command in
-        guard command == "zfs list -o name -H | grep \(config.datasetGrep)" else { return nil }
+        guard command.starts(with: "zfs list -o name -H | grep ") else { return nil }
         return .standardOutput(zfsListOutput)
       }),
       .sudo({ command in

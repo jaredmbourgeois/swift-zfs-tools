@@ -33,3 +33,25 @@ struct SyncConfigure: ParsableCommand {
     )
   }
 }
+
+struct SyncConfigured: AsyncParsableCommand {
+  @OptionGroup()
+  var arguments: Arguments.SyncConfigured
+
+  func run() async throws {
+    let config: Syncer.Config = try decodeFromJsonAtPath(
+      arguments.configPath,
+      fileManager: .default,
+      jsonDecoder: .init()
+    )
+    let dateFormatter = DateFormatter()
+    dateFormatter.calendar = .current
+    dateFormatter.dateFormat = arguments.common.dateFormat ?? Defaults.dateFormat
+    let snapshotter = Syncer(
+      shell: Shell.Executor(arguments: arguments.common),
+      config: config,
+      dateFormatter: dateFormatter
+    )
+    try await snapshotter.sync()
+  }
+}
