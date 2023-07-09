@@ -1,0 +1,32 @@
+[
+  {
+    "snapshot": {
+      "configPath":"/snapshots/dataset-a-snapshot.json"
+    }
+  },
+  {
+    "consolidate": {
+      "configPath":"/snapshots/dataset-a-consolidate.json"
+    }
+  },
+  {
+    "sync": {
+      "configPath":"/snapshots/dataset-a-sync.json"
+    }
+  },
+  {
+    "snapshot": {
+      "configPath":"/snapshots/dataset-b-snapshot.json"
+    }
+  },
+  {
+    "consolidate": {
+      "configPath":"/snapshots/dataset-b-consolidate.json"
+    }
+  },
+  {
+    "sync": {
+      "configPath":"/snapshots/dataset-b-sync.json"
+    }
+  }
+]

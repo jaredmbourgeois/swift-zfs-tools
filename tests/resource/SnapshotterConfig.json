@@ -1,0 +1,6 @@
+{
+  "execute": false,
+  "dateSeparator": "@",
+  "dataset": "nas_12tb/nas",
+  "recursive": true,
+}
