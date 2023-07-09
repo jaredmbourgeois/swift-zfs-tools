@@ -1,3 +1,10 @@
+// Common.swift is part of the swift-zfs-tools open source project.
+//
+// Copyright © 2025 Jared Bourgeois
+//
+// Licensed under Apache License v2.0 with Runtime Library Exception
+//
+
 import Foundation
 import Shell
 
@@ -5,130 +12,120 @@ public typealias Model = Sendable & Codable
 public typealias EquatableModel = Model & Equatable
 public typealias HashableModel = Model & Hashable
 
-extension Shell.Executor {
-  public init(arguments: Arguments.Common) {
-    self.init(
-      shellPath: arguments.shellPath ?? Defaults.shellPath,
-      printsOutput: arguments.shellPrintsStandardOutput ?? Defaults.shellPrintsStandardOutput,
-      printsFailure: arguments.shellPrintsFailure ?? Defaults.shellPrintsFailure
-    )
-  }
+extension DateFormatter {
+    func dateForSnapshot(
+        _ snapshot: String,
+        dateSeparator: String
+    ) throws -> Date {
+        guard let dateSubString = snapshot.split(separator: dateSeparator).last,
+              let date = date(from: String(dateSubString)) else {
+            throw ErrorType.dateFromString(string: snapshot, format: dateFormat)
+        }
+        return date
+    }
 }
 
-extension ShellExecutor {
-  @discardableResult
-  func sudo(
-    _ command: String,
-    execute: Bool,
-    file: String = #file,
-    function: String = #function,
-    line: Int = #line
-  ) async throws -> String {
-    let command = execute ? command : "echo \(command)"
-    let result = await sudo(command)
-    switch result {
-    case .standardOutput(let output):
-      return output
-    case .standardError(let error):
-      throw ErrorType.shellError(command: command, error: error, file: file, function: function, line: line)
-    case .failure:
-      throw ErrorType.shellFailure(command: command, file: file, function: function, line: line)
+public func makeCalendar() -> Calendar {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.locale = .current
+    calendar.timeZone = .current
+    return calendar
+}
+
+public func makeDateFormatter(_ dateFormat: String) -> DateFormatter {
+    let dateFormatter = DateFormatter()
+    dateFormatter.dateFormat = dateFormat
+    dateFormatter.locale = .init(identifier: "en_US_POSIX")
+    dateFormatter.timeZone = .current
+    return dateFormatter
+}
+
+extension ShellAtPath {
+    public init(
+        arguments: Arguments.Common
+    ) {
+        let lineSeparator = arguments.lineSeparator ?? Defaults.lineSeparator
+        let stringEncoding = String.Encoding(rawValue: arguments.stringEncodingRawValue ?? Defaults.stringEncoding.rawValue)
+        @Sendable func prefix(_ string: String) -> String {
+            "zfs-tools command: \(string)"
+        }
+        self = .atPath(
+            arguments.shellPath ?? Defaults.shellPath,
+            shellObserver: .init(
+                onResult: { command, result in
+                    print(prefix(command))
+                    if let error = result.error {
+                        print(prefix("error (\(result.termination.status)) \(error.userInfo[NSLocalizedDescriptionKey] ?? error.localizedDescription)"))
+                    } else {
+                        print(prefix("success (\(result.termination.status))"))
+                    }
+                    if let stdoutString = String(data: result.processOutput.stdout, encoding: stringEncoding) {
+                        if !stdoutString.isEmpty {
+                            print(prefix("stdout\(lineSeparator)\(stdoutString)"))
+                        }
+                    } else {
+                        print(prefix("stdout (\(result.processOutput.stdout.count) bytes) could not be decoded as \(String(reflecting: stringEncoding)) (\(stringEncoding.rawValue))"))
+                    }
+                    if let stderrString = String(data: result.processOutput.stderr, encoding: stringEncoding) {
+                        if !stderrString.isEmpty {
+                            print(prefix("stderr\(lineSeparator)\(stderrString)"))
+                        }
+                    } else {
+                        print(prefix("stderr (\(result.processOutput.stderr.count) bytes) could not be decoded as \(String(reflecting: stringEncoding)) (\(stringEncoding.rawValue))"))
+                    }
+                }
+            ),
+            stringEncoding: stringEncoding
+        )
     }
-  }
+}
 
-  func sudoLines(
-    _ command: String,
-    execute: Bool,
-    file: String = #file,
-    function: String = #function,
-    line: Int = #line
-  ) async throws -> [String] {
-    (try await sudo(command, execute: execute, file: file, function: function, line: line)).lines
-  }
+struct SnapshotAndDate: Equatable, Sendable {
+    let snapshot: String
+    let date: Date
+}
 
-  func zfsDestroy(subject: String, execute: Bool) async throws {
-    try await sudo(
-      ZFS.destroy(subject: subject).command,
-      execute: execute
-    )
-  }
-
-  func zfsDeleteSnapshots(_ snapshots: [String], execute: Bool) async throws {
-    for snapshot in snapshots {
-      try await zfsDestroy(
-        subject: snapshot,
-        execute: execute
-      )
+extension String {
+    func lines(separator: String) -> [String] {
+        split(separator: separator).map { String($0) }
     }
-  }
-
-  func zfsListDatasets(matching: String?, execute: Bool) async throws -> [String] {
-    try await sudoLines(
-      ZFS.listDatasets(matching: matching).command,
-      execute: execute
-    )
-  }
-
-  func zfsListSnapshots(matching: String?, execute: Bool) async throws -> [String] {
-    try await sudoLines(
-      ZFS.listSnapshots(matching: matching).command,
-      execute: execute
-    )
-  }
-
-  func zfsListSnapshotsInDataset(dataset: String, dateSeparator: String, execute: Bool) async throws -> [String] {
-    try await sudoLines(
-      ZFS.listSnapshotsInDataset(dataset: dataset, dateSeparator: dateSeparator).command,
-      execute: execute
-    )
-  }
 }
 
 enum ZFS {
-  case destroy(subject: String)
-  case listDatasets(matching: String?)
-  case listSnapshots(matching: String?)
-  case listSnapshotsInDataset(dataset: String, dateSeparator: String)
-
-  var command: String {
-    switch self {
-    case .destroy(let subject):
-      return "zfs destroy \(subject)"
-
-    case .listDatasets(let matching):
-      let list = Self.list()
-      guard let matching else {
-        return list
-      }
-      return list.matching(matching)
-
-    case .listSnapshots(let matching):
-      let list = "\(Self.list()) -t snapshot"
-      guard let matching else {
-        return list
-      }
-      return list.matching(matching)
-
-    case .listSnapshotsInDataset(let dataset, let dateSeparator):
-      return "\(Self.list()) -t snapshot".matching("\(dataset)\(dateSeparator)")
-
+    static func destroy(subject: String) -> String {
+        "zfs destroy \(subject)"
     }
-  }
 
-  private static func list() -> String {
-    "zfs list -o name -H"
-  }
-}
-
-fileprivate extension String {
-  func matching(_ matching: String) -> String {
-    guard !matching.isEmpty else {
-      return self
+    private static func list() -> String {
+        "zfs list -o name -H"
     }
-    return "\(self) | grep \(matching)"
-  }
+
+    static func listDatasets(grepping: String? = nil) -> String {
+        var command = Self.list()
+        if let grepping {
+            command += " | grep \(grepping)"
+        }
+        return command
+    }
+
+    static func listSnapshots(grepping: String? = nil) -> String {
+        var command = "\(Self.list()) -t snapshot"
+        if let grepping {
+            command += " | grep \(grepping)"
+        }
+        return command
+    }
+
+    static func snapshot(dataset: String, date: Date, dateFormatter: DateFormatter, dateSeparator: String, recursive: Bool = false) -> String {
+        var command = "zfs snapshot"
+        if recursive {
+          command += " -r"
+        }
+        command += " \(dataset)\(dateSeparator)\(dateFormatter.string(from: date))"
+        return command
+    }
 }
 
 extension TimeInterval {
-  public static let secondsPerDay = TimeInterval(24 * 60 * 60)
+    public static let secondsPerDay = TimeInterval(24 * 60 * 60)
 }

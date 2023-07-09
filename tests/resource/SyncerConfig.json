@@ -2,8 +2,10 @@
   "execute": false,
   "dateSeparator": "@",
   "datasetGrep": "nas_12tb/nas",
+  "lineSeparator": "\n",
   "sshPort": "sshPort",
   "sshKeyPath": "sshKeyPath",
   "sshUser": "sshUser",
-  "sshIP": "sshIP"
+  "sshIP": "sshIP",
+  "stringEncodingRawValue": 4
 }

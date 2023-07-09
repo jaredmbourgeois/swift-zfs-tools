@@ -1,51 +1,53 @@
+// ExecuteActions.swift is part of the swift-zfs-tools open source project.
+//
+// Copyright © 2025 Jared Bourgeois
+//
+// Licensed under Apache License v2.0 with Runtime Library Exception
+//
+
 import ArgumentParser
 import Foundation
 import Shell
 import ZFSToolsModel
 
-extension FileManager: @unchecked Sendable {}
-
 struct ExecuteActions: AsyncParsableCommand {
-  @OptionGroup()
-  var arguments: Arguments.ExecuteActions
+    @OptionGroup()
+    var arguments: Arguments.ExecuteActions
 
-  func run() async throws {
-    let fileManager = FileManager.default
-    let jsonDecoder = JSONDecoder()
-    let actions: [Action] = try decodeFromJsonAtPath(
-      arguments.actionsPath,
-      fileManager: fileManager,
-      jsonDecoder: jsonDecoder
-    )
-    let calendar = Calendar.current
-    let dateFormatter = DateFormatter()
-    dateFormatter.calendar = calendar
-    dateFormatter.dateFormat = arguments.common.dateFormat ?? Defaults.dateFormat
-    let executor = ActionExecutor(
-      calendar: calendar,
-      dateFormatter: dateFormatter,
-      fileManager: fileManager,
-      jsonDecoder: jsonDecoder,
-      shell: Shell.Executor(arguments: arguments.common)
-    )
-    try await executor.execute(actions)
-  }
+    func run() async throws {
+        let jsonDecoder = JSONDecoder()
+        let actions: [Action] = try decodeFromJSONAtPath(
+            arguments.actionsPath,
+            fileManager: .default,
+            jsonDecoder: jsonDecoder
+        )
+        let calendar = makeCalendar()
+        let dateFormatter = makeDateFormatter(arguments.common.dateFormat ?? Defaults.dateFormat)
+        let executor = ActionExecutor(
+            calendar: calendar,
+            dateFormatter: dateFormatter,
+            fileManager: { .default },
+            jsonDecoder: jsonDecoder,
+            shell: Shell(arguments: arguments.common)
+        )
+        try await executor.execute(actions)
+    }
 }
 
-struct ExecuteActionsConfigure: AsyncParsableCommand {
-  @OptionGroup()
-  var arguments: Arguments.ExecuteActionsConfigure
+struct ExecuteActionsConfigure: ParsableCommand {
+    @OptionGroup()
+    var arguments: Arguments.ExecuteActionsConfigure
 
-  func run() async throws {
-    try encode(
-      [
-        Action.snapshot(configPath: "/path/to/snapshot/config.json"),
-        Action.consolidate(configPath: "/path/to/consolidate/config.json"),
-        Action.sync(configPath: "/path/to/sync/config.json"),
-      ],
-      toJsonAtPath: arguments.outputPath,
-      fileManager: .default,
-      jsonEncoder: .init()
-    )
-  }
+    func run() throws {
+        try encode(
+            [
+                Action.snapshot(configPath: "/path/to/snapshot/config.json"),
+                Action.consolidate(configPath: "/path/to/consolidate/config.json"),
+                Action.sync(configPath: "/path/to/sync/config.json"),
+            ],
+            toJSONAtPath: arguments.outputPath,
+            fileManager: .default,
+            jsonEncoder: .init()
+        )
+    }
 }

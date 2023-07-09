@@ -1,160 +1,129 @@
+// ConsolidatorConfigTest.swift is part of the swift-zfs-tools open source project.
+//
+// Copyright © 2025 Jared Bourgeois
+//
+// Licensed under Apache License v2.0 with Runtime Library Exception
+//
+
 import ArgumentParser
 import Foundation
 import XCTest
 
 @testable import ZFSToolsModel
 
-class ConsolidatorConfigTest: XCTestCase {
-  private lazy var dateFormatter: DateFormatter = {
-    let dateFormatter = DateFormatter()
-    dateFormatter.dateFormat = Defaults.dateFormat
-    return dateFormatter
-  }()
+final class ConsolidatorConfigTest: XCTestCase {
+    private lazy var defaultConfig: Consolidator.Config = {
+        Self.config(dateFormatter: dateFormatter, fileManager: fileManager)
+    }()
 
-  private lazy var defaultConfig: Consolidator.Config = {
-    Self.config(dateFormatter: dateFormatter, fileManager: fileManager)
-  }()
+    private let fileManager = FileManager.default
 
-  private let fileManager = FileManager.default
+    func testConfigDecode() throws {
+        let data = try XCTUnwrap(Self.defaultConfigEncode.data(using: .utf8))
+        let config = try XCTUnwrap(JSONDecoder().decode(Consolidator.Config.self, from: data))
+        XCTAssertEqual(defaultConfig, config)
+    }
 
-  func testConfigDecode() throws {
-    let data = try XCTUnwrap(Self.defaultConfigEncode.data(using: .utf8))
-    let config = try XCTUnwrap(JSONDecoder().decode(Consolidator.Config.self, from: data))
-    XCTAssertEqual(defaultConfig, config)
-  }
+    func testConfigDecodeEncoded() throws {
+        let data = try XCTUnwrap(Self.defaultConfigDecode.data(using: .utf8))
+        let config = try XCTUnwrap(JSONDecoder().decode(Consolidator.Config.self, from: data))
+        XCTAssertEqual(defaultConfig, config)
+    }
 
-  func testConfigDecodeEncoded() throws {
-    let data = try XCTUnwrap(Self.defaultConfigDecode.data(using: .utf8))
-    let config = try XCTUnwrap(JSONDecoder().decode(Consolidator.Config.self, from: data))
-    XCTAssertEqual(defaultConfig, config)
-  }
+    func testConfigCodable() throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(defaultConfig)
+        let string = String(data: data, encoding: .utf8)
+        XCTAssertEqual(Self.defaultConfigEncode, string)
+    }
 
-  func testConfigCodable() throws {
-    let encoder = JSONEncoder()
-    let data = try encoder.encode(defaultConfig)
-    let string = String(data: data, encoding: .utf8)
-    XCTAssertEqual(Self.defaultConfigEncode, string)
-  }
-
-  func testConfigFromJSON() {
-    XCTAssertEqual(defaultConfig, decodeResource(named: "ConsolidatorConfig", fileManager: fileManager))
-  }
+    func testConfigFromJSON() {
+        let decoder = JSONDecoder()
+        XCTAssertEqual(defaultConfig, decodeResourceJSON(named: "ConsolidatorConfig", fileManager: fileManager, jsonDecoder: decoder))
+        XCTAssertEqual(
+            Self.config(
+                date: nil,
+                dateFormatter: dateFormatter,
+                fileManager: fileManager
+            ),
+            decodeResourceJSON(named: "ConsolidatorConfigNoUpperBound", fileManager: fileManager, jsonDecoder: decoder)
+        )
+    }
 }
 
 extension ConsolidatorConfigTest {
-  static func config(
-    arguments: Arguments.Consolidate? = nil,
-    consolidationPeriod: Consolidator.ConsolidationPeriod? = nil,
-    dateFormatter: DateFormatter,
-    fileManager: FileManager
-  ) -> Consolidator.Config {
-    let arguments = try! arguments ?? .parse([
-      "--dataset-grep", "nas_12tb/nas/",
-      "--execute", "true"
-    ])
-    return try! Consolidator.Config(
-      arguments: arguments,
-      fileManager: fileManager,
-      jsonDecoder: JSONDecoder(),
-      dateFormatter: dateFormatter,
-      date: { defaultConfigDate }
-    )
-  }
-
-  static func consolidationPeriodDays(
-    _ days: UInt16 = 1,
-    snapshots: UInt16 = 365,
-    upperBound: Date = ConsolidatorConfigTest.defaultConfigDate
-  ) -> Consolidator.ConsolidationPeriod {
-    Consolidator.ConsolidationPeriod.ConsolidationPeriodBuilder(upperBound: upperBound)
-      .snapshotPeriod(snapshots: snapshots)
-        .with(days: days)
-        .snapshotPeriodComplete()
-      .build()
-  }
-
-  static func consolidationPeriodWeeks(
-    _ weeksOfYear: UInt16 = 1,
-    snapshots: UInt16 = 365,
-    upperBound: Date = ConsolidatorConfigTest.defaultConfigDate
-  ) -> Consolidator.ConsolidationPeriod {
-    Consolidator.ConsolidationPeriod.ConsolidationPeriodBuilder(upperBound: upperBound)
-      .snapshotPeriod(snapshots: snapshots)
-        .with(weeksOfYear: weeksOfYear)
-        .snapshotPeriodComplete()
-      .build()
-  }
-
-  static let defaultConfigEncode = "{\"snapshotsNotConsolidated\":[],\"execute\":true,\"datasetGrep\":\"nas_12tb\\/nas\\/\",\"dateSeparator\":\"@\",\"consolidationPeriod\":{\"snapshotPeriodBias\":{\"upperBound\":{}},\"upperBound\":681109200,\"snapshotPeriods\":[{\"snapshots\":7,\"frequency\":[{\"day\":{\"_0\":1}}]},{\"snapshots\":3,\"frequency\":[{\"weekOfYear\":{\"_0\":1}}]},{\"snapshots\":11,\"frequency\":[{\"month\":{\"_0\":1}}]},{\"snapshots\":4,\"frequency\":[{\"month\":{\"_0\":3}}]},{\"snapshots\":97,\"frequency\":[{\"year\":{\"_0\":1}}]}]}}"
-
-  static let defaultConfigDateEpoch = 1659416400.0
-  static let defaultConfigDate = Date(timeIntervalSince1970: defaultConfigDateEpoch) // August 2, 2022
-
-  static let defaultConfigDecode = """
-  {
-    "snapshotsNotConsolidated": [],
-    "execute": true,
-    "datasetGrep": "nas_12tb\\/nas\\/",
-    "dateSeparator": "@",
-    "consolidationPeriod": {
-      "snapshotPeriodBias": {
-        "upperBound": {}
-      },
-      "upperBound": 681109200,
-      "snapshotPeriods": [
-        {
-          "snapshots": 7,
-          "frequency": [
-            {
-              "day": {
-                "_0": 1
-              }
-            }
-          ]
-        },
-        {
-          "snapshots": 3,
-          "frequency": [
-            {
-              "weekOfYear": {
-                "_0": 1
-              }
-            }
-          ]
-        },
-        {
-          "snapshots": 11,
-          "frequency": [
-            {
-              "month": {
-                "_0": 1
-              }
-            }
-          ]
-        },
-        {
-          "snapshots": 4,
-          "frequency": [
-            {
-              "month": {
-                "_0": 3
-              }
-            }
-          ]
-        },
-        {
-          "snapshots": 97,
-          "frequency": [
-            {
-              "year": {
-                "_0": 1
-              }
-            }
-          ]
-        }
-      ]
+    static func config(
+        consolidationSchedule: Consolidator.SnapshotConsolidationSchedule? = nil,
+        date: String? = testDateString,
+        dateFormatter: DateFormatter,
+        fileManager: FileManager
+    ) -> Consolidator.Config {
+        .init(
+            datasetGrep: "nas_12tb/nas/",
+            dateSeparator: "@",
+            execute: true,
+            lineSeparator: "\n",
+            schedule: consolidationSchedule ?? Defaults.consolidationSchedule(upperBound: date),
+            snapshotsNotConsolidated: [],
+            stringEncoding: .utf8
+        )
     }
-  }
-  """
-}
 
+    static func consolidationPeriodDays(
+        upperBound: String = testDateString
+    ) -> Consolidator.SnapshotConsolidationSchedule {
+        Consolidator.SnapshotConsolidationSchedule.Builder(upperBound: upperBound)
+            .keepingSnapshots(1, every: 1, .days, repeatedBy: 365)
+            .build()
+    }
+
+    static func consolidationPeriodWeeks(
+        upperBound: String = testDateString
+    ) -> Consolidator.SnapshotConsolidationSchedule {
+        Consolidator.SnapshotConsolidationSchedule.Builder(upperBound: upperBound)
+            .keepingSnapshots(1, every: 1, .weeks, repeatedBy: 52)
+            .build()
+    }
+
+    static let defaultConfigEncode = "{\"datasetGrep\":\"nas_12tb\\/nas\\/\",\"dateSeparator\":\"@\",\"execute\":true,\"lineSeparator\":\"\\n\",\"schedule\":{\"periods\":[{\"everyMultiple\":1,\"everyPeriod\":\"days\",\"repetitions\":7,\"snapshots\":1},{\"everyMultiple\":1,\"everyPeriod\":\"weeks\",\"repetitions\":3,\"snapshots\":1},{\"everyMultiple\":1,\"everyPeriod\":\"months\",\"repetitions\":11,\"snapshots\":1},{\"everyMultiple\":1,\"everyPeriod\":\"years\",\"snapshots\":1}],\"upperBound\":\"\(testDateString)\"},\"snapshotsNotConsolidated\":[],\"stringEncodingRawValue\":4}"
+
+    static let defaultConfigDecode = """
+    {
+      "datasetGrep": "nas_12tb\\/nas\\/",
+      "dateSeparator": "@",
+      "execute": true,
+      "lineSeparator": "\\n",
+      "schedule": {
+        "periods": [
+          {
+            "everyMultiple": 1,
+            "everyPeriod": "days",
+            "repetitions": 7,
+            "snapshots": 1
+          },
+          {
+            "everyMultiple": 1,
+            "everyPeriod": "weeks",
+            "repetitions": 3,
+            "snapshots": 1
+          },
+          {
+            "everyMultiple": 1,
+            "everyPeriod": "months",
+            "repetitions": 11,
+            "snapshots": 1
+          },
+          {
+            "everyMultiple": 1,
+            "everyPeriod": "years",
+            "snapshots": 1
+          }
+        ],
+        "upperBound": "\(testDateString)"
+      },
+      "snapshotsNotConsolidated": [],
+      "stringEncodingRawValue": 4
+    }
+    """
+}

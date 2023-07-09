@@ -1,94 +1,81 @@
+// SnapshotterTest.swift is part of the swift-zfs-tools open source project.
+//
+// Copyright © 2025 Jared Bourgeois
+//
+// Licensed under Apache License v2.0 with Runtime Library Exception
+//
+
 import Foundation
 import Shell
 import XCTest
 
 @testable import ZFSToolsModel
 
-class SnapshotterTest: XCTestCase {
-  private let calendar: Calendar = {
-    var calendar = Calendar(identifier: .gregorian)
-    calendar.timeZone = TimeZone.current
-    return calendar
-  }()
+final class SnapshotterTest: XCTestCase {
+    private let calendar = makeCalendar()
 
-  private lazy var dateFormatter: DateFormatter = {
-    let dateFormatter = DateFormatter()
-    dateFormatter.dateFormat = Defaults.dateFormat
-    dateFormatter.calendar = calendar
-    return dateFormatter
-  }()
+    private lazy var dateFormatter = makeDateFormatter(Defaults.dateFormat)
 
-  private let snapshotDate = ConsolidatorConfigTest.defaultConfigDate
+    private let snapshotDate = testDate
 
-  private let timeout = TimeInterval(60)
+    private let timeout = TimeInterval(1)
 
-  func testSnapshot() async throws {
-    let config = SnapshotterConfigTest.snapshotConfig(recursive: false, execute: true)
-    let expectation = expectation(description: "expectation-\(UUID().uuidString)")
-    let setup = setup(
-      commandHandlers: commandHandlers(config),
-      actionHandler: { action in
-        guard action.command == "zfs snapshot \(SnapshotterConfigTest.defaultDataset)\(Defaults.dateSeparator)\(self.dateFormatter.string(from: self.snapshotDate))" else { return }
-        print("TEST: \(action.command)")
-        expectation.fulfill()
-      },
-      config: config
-    )
-    try await setup.snapshotter.snapshot()
-    await fulfillment(of: [expectation], timeout: timeout)
-  }
-
-  func testSnapshotRecursive() async throws {
-    let config = SnapshotterConfigTest.snapshotConfig(recursive: true, execute: true)
-    let expectation = expectation(description: "expectation-\(UUID().uuidString)")
-    let setup = setup(
-      commandHandlers: commandHandlers(config),
-      actionHandler: { action in
-        guard action.command == "zfs snapshot -r \(SnapshotterConfigTest.defaultDataset)\(Defaults.dateSeparator)\(self.dateFormatter.string(from: self.snapshotDate))" else { return }
-        print("TEST: \(action.command)")
-        expectation.fulfill()
-      },
-      config: config
-    )
-    try await setup.snapshotter.snapshot()
-    await fulfillment(of: [expectation], timeout: timeout)
-  }
-}
-
-extension SnapshotterTest {
-  private typealias Setup = (shell: MockShell, snapshotter: Snapshotter, dateFormatter: DateFormatter)
-
-  private func setup(
-    commandHandlers: [MockShell.CommandHandler]? = nil,
-    actionHandler: MockShell.ActionHandler? = nil,
-    config: Snapshotter.Config = SnapshotterConfigTest.defaultConfig
-  ) -> Setup {
-    let shell = MockShell(
-      commandHandlers ?? self.commandHandlers(config),
-      actionHandler: actionHandler
-    )
-    let snapshotter = Snapshotter(
-      shell: shell,
-      config: config,
-      dateFormatter: dateFormatter,
-      date: { self.snapshotDate }
-    )
-
-    return (shell, snapshotter, dateFormatter)
-  }
-}
-
-extension SnapshotterTest {
-  private func commandHandlers(_ config: Snapshotter.Config) -> [MockShell.CommandHandler] {
-    [
-      .sudo { command in
-        guard command.contains("zfs snapshot ") else { return nil }
-        return .standardOutput("")
-      },
-      .sudo { command in
-        guard !command.contains("zfs snapshot ") else { return nil }
-        return .standardError("")
-      },
-    ]
-  }
+    func testSnapshotsAreTaken() async throws {
+        let config = SnapshotterConfigTest.snapshotConfig(recursive: true, execute: true)
+        let datasets = [
+            "nas_12tb/nas",
+            "nas_12tb/nas/documents",
+            "nas_12tb/nas/media",
+        ]
+        let snapshotNasCommand = "zfs snapshot -r \(datasets[0])\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))"
+        let snapshotNasDocumentsCommand = "zfs snapshot -r \(datasets[1])\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))"
+        let snapshotNasMediaCommand = "zfs snapshot -r \(datasets[2])\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))"
+        let expectSnapshotNas = expectation(description: "expect snapshot \(datasets[0])")
+        let expectSnapshotNasDocuments = expectation(description: "expect snapshot \(datasets[1])")
+        let expectSnapshotNasMedia = expectation(description: "expect snapshot \(datasets[2])")
+        let shell = ShellAtPath {
+            @Sendable (
+                _ command: ShellCommand,
+                _ dryRun: Bool,
+                _ estimatedOutputSize: Int?,
+                _ estimatedErrorSize: Int?,
+                _ statusesForResult: ShellTermination.StatusesForResult,
+                _ stream: ShellStream?,
+                _ timeout: TimeInterval?
+            ) async -> ShellResult in
+            switch command {
+            case "zfs list -o name -H | grep \(SnapshotterConfigTest.defaultDataset)":
+                return .success(
+                    stdout: datasets.joined(separator: Defaults.lineSeparator)
+                )!
+            case snapshotNasCommand:
+                expectSnapshotNas.fulfill()
+                return .success()
+            case snapshotNasDocumentsCommand:
+                expectSnapshotNasDocuments.fulfill()
+                return .success()
+            case snapshotNasMediaCommand:
+                expectSnapshotNasMedia.fulfill()
+                return .success()
+            default:
+                XCTFail("unexpected command: \(command)")
+                return .success()
+            }
+        }
+        let snapshotter = Snapshotter(
+            config: config,
+            date: { [snapshotDate] in snapshotDate },
+            dateFormatter: dateFormatter,
+            shell: shell
+        )
+        try await snapshotter.snapshot()
+        await fulfillment(
+            of: [
+                expectSnapshotNas,
+                expectSnapshotNasDocuments,
+                expectSnapshotNasMedia,
+            ],
+            timeout: timeout
+        )
+    }
 }

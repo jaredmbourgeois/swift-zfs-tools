@@ -1,0 +1,35 @@
+{
+    "schedule": {
+      "periods": [
+        {
+          "everyMultiple": 1,
+          "everyPeriod": "days",
+          "repetitions": 7,
+          "snapshots": 1
+        },
+        {
+          "everyMultiple": 1,
+          "everyPeriod": "weeks",
+          "repetitions": 3,
+          "snapshots": 1
+        },
+        {
+          "everyMultiple": 1,
+          "everyPeriod": "months",
+          "repetitions": 11,
+          "snapshots": 1
+        },
+        {
+          "everyMultiple": 1,
+          "everyPeriod": "years",
+          "snapshots": 1
+        }
+      ]
+    },
+    "datasetGrep": "nas_12tb/nas/",
+    "dateSeparator": "@",
+    "execute": true,
+    "lineSeparator": "\n",
+    "snapshotsNotConsolidated": [],
+    "stringEncodingRawValue": 4
+}

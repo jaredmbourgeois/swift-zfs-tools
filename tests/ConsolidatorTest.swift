@@ -1,411 +1,354 @@
+// ConsolidatorTest.swift is part of the swift-zfs-tools open source project.
+//
+// Copyright © 2025 Jared Bourgeois
+//
+// Licensed under Apache License v2.0 with Runtime Library Exception
+//
+
 import Foundation
 import Shell
 import XCTest
 
 @testable import ZFSToolsModel
 
-class ConsolidatorTest: XCTestCase {
-  private let calendar = Calendar(identifier: .gregorian)
-
-  let dateFormat = "yyyyMMdd-HHmmss"
-  private lazy var dateFormatter: DateFormatter = {
-    let dateFormatter = DateFormatter()
-    dateFormatter.calendar = calendar
-    dateFormatter.dateFormat = dateFormat
-    return dateFormatter
-  }()
-
-  private let timeout = TimeInterval(120)
-
-  private let upperBound = Date(timeIntervalSince1970: 1659416400) // August 2, 2022
-
-  private func makeConfig(
-    snapshotPeriods: UInt16,
-    daysPerSnapshot: UInt16?
-  ) -> Consolidator.Config {
-    Consolidator.Config(
-      datasetGrep: "nas_12/nas/",
-      dateSeparator: "@",
-      snapshotsNotConsolidated: [],
-      consolidationPeriod: Consolidator.ConsolidationPeriod.ConsolidationPeriodBuilder(upperBound: upperBound)
-        .snapshotPeriod(snapshots: snapshotPeriods)
-        .with(days: daysPerSnapshot)
-        .snapshotPeriodComplete()
-        .build(),
-      execute: true
-    )
-  }
-
-  private func makeConfig(
-    snapshotsNotConsolidated: [String] = [],
-    consolidationPeriod: Consolidator.ConsolidationPeriod
-  ) -> Consolidator.Config {
-    Consolidator.Config(
-      datasetGrep: "nas_12/nas/",
-      dateSeparator: "@",
-      snapshotsNotConsolidated: snapshotsNotConsolidated,
-      consolidationPeriod: consolidationPeriod,
-      execute: true
-    )
-  }
-
-  func testDeletionWhenSnapshotsOutOfRange() async throws {
-    let config = makeConfig(
-      consolidationPeriod: Consolidator.ConsolidationPeriod.ConsolidationPeriodBuilder(upperBound: Date())
-        .snapshotPeriod(snapshots: 1)
-        .with(days: 2)
-        .snapshotPeriodComplete()
-        .build()
-    )
-    let documentsExpectation = expectation(description: "documentsExpectation-\(UUID().uuidString)")
-    let familyExpectation = expectation(description: "familyExpectation-\(UUID().uuidString)")
-    let mediaExpectation = expectation(description: "mediaExpectation-\(UUID().uuidString)")
-    let mediaAudioBooksExpectation = expectation(description: "mediaAudioBooksxpectation-\(UUID().uuidString)")
-    let mediaGamesExpectation = expectation(description: "mediaGamesxpectation-\(UUID().uuidString)")
-    let mediaMoviesExpectation = expectation(description: "mediaMoviesxpectation-\(UUID().uuidString)")
-    let mediaTVExpectation = expectation(description: "mediaTVxpectation-\(UUID().uuidString)")
-    let softwareExpectation = expectation(description: "softwarexpectation-\(UUID().uuidString)")
-    let sourceExpectation = expectation(description: "sourcexpectation-\(UUID().uuidString)")
-    let setup = setup(
-      commandHandlers: commandHandlers(
-        config,
-        zfsListOutput: Self.zfsDatasetsOutput,
-        zfsListSnapshotOutput: Self.zfsSnapshotsOutput
-      ),
-      actionHandler: { action in
-        switch action.command {
-        case "echo nas_12tb/nas/documents total: 3, deleted: 3, kept: 0": documentsExpectation.fulfill()
-        case "echo nas_12tb/nas/family total: 3, deleted: 3, kept: 0": familyExpectation.fulfill()
-        case "echo nas_12tb/nas/media total: 3, deleted: 3, kept: 0": mediaExpectation.fulfill()
-        case "echo nas_12tb/nas/media/audio_books total: 3, deleted: 3, kept: 0": mediaAudioBooksExpectation.fulfill()
-        case "echo nas_12tb/nas/media/games total: 3, deleted: 3, kept: 0": mediaGamesExpectation.fulfill()
-        case "echo nas_12tb/nas/media/movies total: 3, deleted: 3, kept: 0": mediaMoviesExpectation.fulfill()
-        case "echo nas_12tb/nas/media/tv_comedy_documentaries total: 3, deleted: 3, kept: 0": mediaTVExpectation.fulfill()
-        case "echo nas_12tb/nas/software total: 3, deleted: 3, kept: 0": softwareExpectation.fulfill()
-        case "echo nas_12tb/nas/source total: 3, deleted: 3, kept: 0": sourceExpectation.fulfill()
-        default: return
-        }
-        print("TEST \(action.command)")
-      },
-      config: config
-    )
-    try await setup.consolidator.consolidate()
-    await fulfillment(
-      of: [
-        documentsExpectation,
-        familyExpectation,
-        mediaExpectation,
-        mediaAudioBooksExpectation,
-        mediaGamesExpectation,
-        mediaMoviesExpectation,
-        mediaTVExpectation,
-        softwareExpectation,
-        sourceExpectation,
-      ],
-      timeout: timeout
-    )
-  }
-
-  func testKeepSnapshotsNotConsolidated() async throws {
-    let keepSnapshots = [
-      "nas_12tb/nas/documents@20210101-020423",
-      "nas_12tb/nas/documents@20210823-033128",
-      "nas_12tb/nas/documents@20220801-235247"
-    ]
-    let config = makeConfig(
-      snapshotsNotConsolidated: keepSnapshots,
-      consolidationPeriod: Consolidator.ConsolidationPeriod.ConsolidationPeriodBuilder(upperBound: Date())
-        .snapshotPeriod(snapshots: 1)
-        .with(days: 2)
-        .snapshotPeriodComplete()
-        .build()
-    )
-    let expectation = expectation(description: "expectation-\(UUID().uuidString)")
-    let setup = setup(
-      commandHandlers: commandHandlers(
-        config,
-        zfsListOutput: Self.zfsDatasetsOutput,
-        zfsListSnapshotOutput: Self.zfsSnapshotsOutput
-      ),
-      actionHandler: { action in
-        keepSnapshots.forEach {
-          XCTAssertNotEqual("zfs destroy \($0)", action.command)
-        }
-        guard action.command.contains("nas_12tb/nas/documents total: 3, deleted: 0, kept: 3") else { return }
-        print("TEST \(action.command)")
-        expectation.fulfill()
-      },
-      config: config
-    )
-    try await setup.consolidator.consolidate()
-    await fulfillment(of: [expectation], timeout: timeout)
-  }
-
-  func testSnapshotsAreKept() async throws {
-    let config = makeConfig(
-      consolidationPeriod: Consolidator.ConsolidationPeriod.ConsolidationPeriodBuilder(upperBound: upperBound)
-        .snapshotPeriod(snapshots: 24)
-        .with(months: 1)
-        .snapshotPeriodComplete()
-        .build()
-    )
-    let documentsExpectation = expectation(description: "documentsExpectation-\(UUID().uuidString)")
-    let familyExpectation = expectation(description: "familyExpectation-\(UUID().uuidString)")
-    let mediaExpectation = expectation(description: "mediaExpectation-\(UUID().uuidString)")
-    let mediaAudioBooksExpectation = expectation(description: "mediaAudioBooksxpectation-\(UUID().uuidString)")
-    let mediaGamesExpectation = expectation(description: "mediaGamesxpectation-\(UUID().uuidString)")
-    let mediaMoviesExpectation = expectation(description: "mediaMoviesxpectation-\(UUID().uuidString)")
-    let mediaTVExpectation = expectation(description: "mediaTVxpectation-\(UUID().uuidString)")
-    let softwareExpectation = expectation(description: "softwarexpectation-\(UUID().uuidString)")
-    let sourceExpectation = expectation(description: "sourcexpectation-\(UUID().uuidString)")
-    let setup = setup(
-      commandHandlers: commandHandlers(
-        config,
-        zfsListOutput: Self.zfsDatasetsOutput,
-        zfsListSnapshotOutput: Self.zfsSnapshotsOutput
-      ),
-      actionHandler: { action in
-        switch action.command {
-        case "echo nas_12tb/nas/documents total: 3, deleted: 0, kept: 3": documentsExpectation.fulfill()
-        case "echo nas_12tb/nas/family total: 3, deleted: 0, kept: 3": familyExpectation.fulfill()
-        case "echo nas_12tb/nas/media total: 3, deleted: 0, kept: 3": mediaExpectation.fulfill()
-        case "echo nas_12tb/nas/media/audio_books total: 3, deleted: 0, kept: 3": mediaAudioBooksExpectation.fulfill()
-        case "echo nas_12tb/nas/media/games total: 3, deleted: 0, kept: 3": mediaGamesExpectation.fulfill()
-        case "echo nas_12tb/nas/media/movies total: 3, deleted: 0, kept: 3": mediaMoviesExpectation.fulfill()
-        case "echo nas_12tb/nas/media/tv_comedy_documentaries total: 3, deleted: 0, kept: 3": mediaTVExpectation.fulfill()
-        case "echo nas_12tb/nas/software total: 3, deleted: 0, kept: 3": softwareExpectation.fulfill()
-        case "echo nas_12tb/nas/source total: 3, deleted: 0, kept: 3": sourceExpectation.fulfill()
-        default: return
-        }
-        print("TEST \(action.command)")
-      },
-      config: config
-    )
-    try await setup.consolidator.consolidate()
-    await fulfillment(
-      of: [
-        documentsExpectation,
-        familyExpectation,
-        mediaExpectation,
-        mediaAudioBooksExpectation,
-        mediaGamesExpectation,
-        mediaMoviesExpectation,
-        mediaTVExpectation,
-        softwareExpectation,
-        sourceExpectation,
-      ],
-      timeout: timeout
-    )
-  }
-  
-  func testThreeSnapshotsPerDayAreConsolidatedToSinglePerPeriod() async throws {
-    try await testSnapshotConsolidation(
-      upperBound: upperBound,
-      daysPerSnapshot: 3,
-      snapshotPeriods: 64,
-      snapshotsPerDay: 3
-    )
-  }
-
-  func testTwoSnapshotsPerDayAreConsolidatedToSinglePerPeriod() async throws {
-    try await testSnapshotConsolidation(
-      upperBound: upperBound,
-      daysPerSnapshot: 3,
-      snapshotPeriods: 64,
-      snapshotsPerDay: 2
-    )
-  }
-
-  func testOneSnapshotsPerDayAreConsolidatedToSinglePerPeriod() async throws {
-    try await testSnapshotConsolidation(
-      upperBound: upperBound,
-      daysPerSnapshot: 3,
-      snapshotPeriods: 64,
-      snapshotsPerDay: 1
-    )
-  }
-
-  private func testSnapshotConsolidation(
-    upperBound: Date,
-    daysPerSnapshot: UInt16,
-    snapshotPeriods: UInt16,
-    snapshotsPerDay: Int
-  ) async throws {
-    let config = makeConfig(
-      snapshotPeriods: snapshotPeriods,
-      daysPerSnapshot: daysPerSnapshot
-    )
-    let calendar = Calendar(identifier: .gregorian)
-    let lowerBound = try XCTUnwrap(calendar.date(byAdding: .day, value: -Int(daysPerSnapshot * snapshotPeriods), to: upperBound))
-    let dateRange = lowerBound..<upperBound
-    let datasetName = Self.zfsDatasetsSingle[0]
-    let snapshotsOutput = snapshotsPerDayForRange(
-      snapshotsPerDay,
-      forRange: dateRange,
-      datasetName: datasetName,
-      dateSeparator: config.dateSeparator
-    )
-    let snapshots = snapshotsOutput.split(separator: line()).map { String($0) }
-    let snapshotsKept = snapshots.count / (snapshotsPerDay * Int(daysPerSnapshot))
-    let snapshotsDeleted = snapshots.count - snapshotsKept
-    let expectation = self.expectation(description: "expectation-\(UUID().uuidString)")
-    let setup = setup(
-      commandHandlers: commandHandlers(
-        config,
-        zfsListOutput: Self.zfsDatasetsOutputSingle,
-        zfsListSnapshotOutput: snapshotsOutput
-      ),
-      actionHandler: { action in
-        guard action.command.contains("echo \(datasetName) total: \(snapshots.count), deleted: \(snapshotsDeleted), kept: \(snapshotsKept)") else { return }
-        expectation.fulfill()
-      },
-      config: config
-    )
-    try await setup.consolidator.consolidate()
-    await fulfillment(of: [expectation], timeout: timeout)
-  }
-
-  private func snapshotsPerDayForRange(
-    _ snapshotsPerDay: Int,
-    forRange range: Range<Date>,
-    datasetName: String,
-    dateSeparator: String
-  ) -> String {
-    let timeBetweenSnapshots = TimeInterval.secondsPerDay / TimeInterval(snapshotsPerDay + 1)
-    var date = range.upperBound
-    var snapshots = ""
-    while date >= range.lowerBound {
-      var dateInDate = date
-      for snapshotIndex in 0..<snapshotsPerDay {
-        dateInDate = date.addingTimeInterval(-TimeInterval(snapshotIndex)*timeBetweenSnapshots)
-        snapshots.append(line("\(datasetName)\(dateSeparator)\(dateFormatter.string(from: dateInDate))"))
-      }
-      date = calendar.date(byAdding: .day, value: -1, to: date)!
+final class ConsolidatorTest: XCTestCase {
+    private func makeConfig(
+        datasetGrep: String? = "nas_12tb/nas/",
+        dateSeparator: String = "@",
+        execute: Bool = true,
+        lineSeparator: String = "\n",
+        schedule: Consolidator.SnapshotConsolidationSchedule,
+        snapshotsNotConsolidated: [String] = [],
+        stringEncoding: String.Encoding = .utf8
+    ) -> Consolidator.Config {
+        .init(
+            datasetGrep: datasetGrep,
+            dateSeparator: dateSeparator,
+            execute: execute,
+            lineSeparator: lineSeparator,
+            schedule: schedule,
+            snapshotsNotConsolidated: snapshotsNotConsolidated,
+            stringEncoding: stringEncoding
+        )
     }
-    return snapshots
-  }
-}
 
-extension ConsolidatorTest {
-  private typealias Setup = (shell: MockShell, consolidator: Consolidator)
+    func testSnapshotsAreConsolidatedInSinglePeriod() async throws {
+        let expectDestroy20220729 = expectation(description: "expect destroy 20220729")
+        let expectDestroy20220801 = expectation(description: "expect destroy 20220801")
+        let expectDestroy20220805 = expectation(description: "expect destroy 20220805")
+        let config = makeConfig(
+            schedule: .Builder(upperBound: testDateString)
+                .keepingSnapshots(1, every: 1, .weeks, repeatedBy: 1)
+                .build()
+        )
+        let shell = ShellAtPath { @Sendable (
+            _ command: ShellCommand,
+            _ dryRun: Bool,
+            _ estimatedOutputSize: Int?,
+            _ estimatedErrorSize: Int?,
+            _ statusesForResult: ShellTermination.StatusesForResult,
+            _ stream: ShellStream?,
+            _ timeout: TimeInterval?
+        ) async -> ShellResult in
+            switch command {
+            case "zfs list -o name -H | grep nas_12tb/nas/":
+                return .success(
+                    stdout: """
+                    nas_12tb/nas/documents
+                    """
+                )!
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/":
+                return .success(
+                    stdout: """
+                    nas_12tb/nas/documents@20220805-000000
+                    nas_12tb/nas/documents@20220803-000000
+                    nas_12tb/nas/documents@20220801-000000
+                    nas_12tb/nas/documents@20220729-000000
+                    """
+                )!
+            case "zfs destroy nas_12tb/nas/documents@20220729-000000":
+                expectDestroy20220729.fulfill()
+                return .success()
+            case "zfs destroy nas_12tb/nas/documents@20220801-000000":
+                expectDestroy20220801.fulfill()
+                return .success()
+            case "zfs destroy nas_12tb/nas/documents@20220805-000000":
+                expectDestroy20220805.fulfill()
+                return .success()
+            default:
+                XCTFail("unexpected command: \(command)")
+                return .success()
+            }
+        }
+        let consolidator = Consolidator(
+            calendar: calendar,
+            config: config,
+            date: { [testDate] in testDate },
+            dateFormatter: dateFormatter,
+            shell: shell
+        )
+        try await consolidator.consolidate()
+        await fulfillment(
+            of: [
+                expectDestroy20220729,
+                expectDestroy20220801,
+                expectDestroy20220805
+            ],
+            timeout: timeout
+        )
+    }
 
-  private func setup(
-    commandHandlers: [MockShell.CommandHandler] = [],
-    actionHandler: MockShell.ActionHandler? = nil,
-    config: Consolidator.Config? = nil
-  ) -> Setup {
-    let shell = MockShell(
-      commandHandlers,
-      actionHandler: actionHandler
-    )
-    let consolidator = Consolidator(
-      shell: shell,
-      config: config ?? ConsolidatorConfigTest.config(
-        dateFormatter: dateFormatter,
-        fileManager: .default
-      ),
-      calendar: calendar,
-      dateFormatter: dateFormatter
-    )
-    return (shell, consolidator)
-  }
-}
+    func testSnapshotsAreConsolidatedIndefinitely() async throws {
+        let expectDestroy20220801 = expectation(description: "expect destroy 20220801")
+        let expectDestroy20220805 = expectation(description: "expect destroy 20220805")
+        let config = makeConfig(
+            schedule: .Builder(upperBound: testDateString)
+                .buildIndefinitelyKeepingSnapshots(
+                    1,
+                    every: 1,
+                    .weeks
+                )
+        )
+        let shell = ShellAtPath { @Sendable (
+            _ command: ShellCommand,
+            _ dryRun: Bool,
+            _ estimatedOutputSize: Int?,
+            _ estimatedErrorSize: Int?,
+            _ statusesForResult: ShellTermination.StatusesForResult,
+            _ stream: ShellStream?,
+            _ timeout: TimeInterval?
+        ) async -> ShellResult in
+            switch command {
+            case "zfs list -o name -H | grep nas_12tb/nas/":
+                return .success(
+                    stdout: """
+                    nas_12tb/nas/documents
+                    """
+                )!
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/":
+                return .success(
+                    stdout: """
+                    nas_12tb/nas/documents@20220805-000000
+                    nas_12tb/nas/documents@20220803-000000
+                    nas_12tb/nas/documents@20220801-000000
+                    nas_12tb/nas/documents@20220729-000000
+                    """
+                )!
+            case "zfs destroy nas_12tb/nas/documents@20220801-000000":
+                expectDestroy20220801.fulfill()
+                return .success()
+            case "zfs destroy nas_12tb/nas/documents@20220805-000000":
+                expectDestroy20220805.fulfill()
+                return .success()
+            default:
+                XCTFail("unexpected command: \(command)")
+                return .success()
+            }
+        }
+        let consolidator = Consolidator(
+            calendar: calendar,
+            config: config,
+            date: { [testDate] in testDate },
+            dateFormatter: dateFormatter,
+            shell: shell
+        )
+        try await consolidator.consolidate()
+        await fulfillment(
+            of: [
+                expectDestroy20220801,
+                expectDestroy20220805
+            ],
+            timeout: timeout
+        )
+    }
 
-extension ConsolidatorTest {
-  private func commandHandlers(
-    _ config: Consolidator.Config,
-    zfsListOutput: String,
-    zfsListSnapshotOutput: String
-  ) -> [MockShell.CommandHandler] {
-    [
-      .sudo({ command in
-        guard command == "zfs list -o name -H | grep \(config.datasetGrep)" else { return nil }
-        return .standardOutput(zfsListOutput)
-      }),
-      .sudo({ command in
-        guard command == "zfs list -o name -H -t snapshot" else { return nil }
-        return .standardOutput(zfsListSnapshotOutput)
-      }),
-      .sudo({ command in
-        let prefix = "zfs list -o name -H -t snapshot | grep "
-        guard command.starts(with: prefix) else { return nil }
-        let pattern = command.dropFirst(prefix.count)
-        let output = zfsListSnapshotOutput.lines
-          .filter { $0.contains(pattern) }
-          .joined(separator: "\n")
-        return .standardOutput(output)
-      }),
-      .sudo({ command in
-        guard command.contains("zfs destroy ") else { return nil }
-        return .standardOutput("")
-      })
-    ]
-  }
+    func testSnapshotsAreKept() async throws {
+        let expectNoDeletions = expectation(description: "expect no deletions")
+        expectNoDeletions.isInverted = true
+        let config = makeConfig(
+            schedule: .Builder(upperBound: testDateString)
+                .keepingSnapshots(1, every: 1, .days, repeatedBy: 7)
+                .build()
+        )
+        let shell = ShellAtPath { @Sendable (
+            _ command: ShellCommand,
+            _ dryRun: Bool,
+            _ estimatedOutputSize: Int?,
+            _ estimatedErrorSize: Int?,
+            _ statusesForResult: ShellTermination.StatusesForResult,
+            _ stream: ShellStream?,
+            _ timeout: TimeInterval?
+        ) async -> ShellResult in
+            switch command {
+            case "zfs list -o name -H | grep nas_12tb/nas/":
+                return .success(
+                    stdout: """
+                    nas_12tb/nas/documents
+                    """
+                )!
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/":
+                return .success(
+                    stdout: """
+                    nas_12tb/nas/documents@20220805-000000
+                    nas_12tb/nas/documents@20220803-000000
+                    nas_12tb/nas/documents@20220801-000000
+                    """
+                )!
+            default:
+                XCTFail("unexpected command: \(command)")
+                expectNoDeletions.fulfill()
+                return .success()
+            }
+        }
+        let consolidator = Consolidator(
+            calendar: calendar,
+            config: config,
+            date: { [testDate] in testDate },
+            dateFormatter: dateFormatter,
+            shell: shell
+        )
+        try await consolidator.consolidate()
+        await fulfillment(of: [expectNoDeletions], timeout: timeout)
+    }
 
-  private static let zfsDatasets: [String] = zfsDatasetsOutput.lines
-  private static let zfsDatasetsOutput: String = """
-    nas_12tb/nas/documents
-    nas_12tb/nas/family
-    nas_12tb/nas/media
-    nas_12tb/nas/media/audio_books
-    nas_12tb/nas/media/games
-    nas_12tb/nas/media/movies
-    nas_12tb/nas/media/music
-    nas_12tb/nas/media/tv_comedy_documentaries
-    nas_12tb/nas/pictures
-    nas_12tb/nas/projects
-    nas_12tb/nas/software
-    nas_12tb/nas/source
-    """
+    func testSnapshotsAreNotConsolidated() async throws {
+        let expectDestroy20220729 = expectation(description: "expect destroy 20220729")
+        expectDestroy20220729.isInverted = true
+        let expectDestroy20220801 = expectation(description: "expect destroy 20220801")
+        expectDestroy20220801.isInverted = true
+        let expectDestroy20220805 = expectation(description: "expect destroy 20220805")
+        let config = makeConfig(
+            schedule: .Builder(upperBound: testDateString)
+                .keepingSnapshots(1, every: 1, .weeks, repeatedBy: 1)
+                .build(),
+            snapshotsNotConsolidated: [
+                "nas_12tb/nas/documents@20220729-000000",
+                "nas_12tb/nas/documents@20220801-000000",
+            ]
+        )
+        let shell = ShellAtPath { @Sendable (
+            _ command: ShellCommand,
+            _ dryRun: Bool,
+            _ estimatedOutputSize: Int?,
+            _ estimatedErrorSize: Int?,
+            _ statusesForResult: ShellTermination.StatusesForResult,
+            _ stream: ShellStream?,
+            _ timeout: TimeInterval?
+        ) async -> ShellResult in
+            switch command {
+            case "zfs list -o name -H | grep nas_12tb/nas/":
+                return .success(
+                    stdout: """
+                    nas_12tb/nas/documents
+                    """
+                )!
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/":
+                return .success(
+                    stdout: """
+                    nas_12tb/nas/documents@20220805-000000
+                    nas_12tb/nas/documents@20220803-000000
+                    nas_12tb/nas/documents@20220801-000000
+                    nas_12tb/nas/documents@20220729-000000
+                    """
+                )!
+            case "zfs destroy nas_12tb/nas/documents@20220729-000000":
+                expectDestroy20220729.fulfill()
+                return .success()
+            case "zfs destroy nas_12tb/nas/documents@20220801-000000":
+                expectDestroy20220801.fulfill()
+                return .success()
+            case "zfs destroy nas_12tb/nas/documents@20220805-000000":
+                expectDestroy20220805.fulfill()
+                return .success()
+            default:
+                XCTFail("unexpected command: \(command)")
+                return .success()
+            }
+        }
+        let consolidator = Consolidator(
+            calendar: calendar,
+            config: config,
+            date: { [testDate] in testDate },
+            dateFormatter: dateFormatter,
+            shell: shell
+        )
+        try await consolidator.consolidate()
+        await fulfillment(
+            of: [
+                expectDestroy20220729,
+                expectDestroy20220801,
+                expectDestroy20220805
+            ],
+            timeout: timeout
+        )
+    }
 
-  private static let zfsDatasetsSingle = zfsDatasetsOutputSingle.lines
-  private static let zfsDatasetsOutputSingle: String = """
-    nas_12tb/nas/documents
-    """
-
-  private static let zfsSnapshots = zfsSnapshotsOutput.lines
-  private static let zfsSnapshotsOutput: String = """
-    nas_12tb/nas/documents@20210101-020423
-    nas_12tb/nas/documents@20210823-033128
-    nas_12tb/nas/documents@20220801-235247
-    nas_12tb/nas/family@20210101-020423
-    nas_12tb/nas/family@20210823-033128
-    nas_12tb/nas/family@20220801-235247
-    nas_12tb/nas/media@20210101-020423
-    nas_12tb/nas/media@20210823-033128
-    nas_12tb/nas/media@20220801-235247
-    nas_12tb/nas/media/audio_books@20210101-020423
-    nas_12tb/nas/media/audio_books@20210823-033128
-    nas_12tb/nas/media/audio_books@20220801-235247
-    nas_12tb/nas/media/games@20210101-020423
-    nas_12tb/nas/media/games@20210823-033128
-    nas_12tb/nas/media/games@20220801-235247
-    nas_12tb/nas/media/movies@20210101-020423
-    nas_12tb/nas/media/movies@20210823-033128
-    nas_12tb/nas/media/movies@20220801-235247
-    nas_12tb/nas/media/music@20210101-020423
-    nas_12tb/nas/media/music@20210823-033128
-    nas_12tb/nas/media/music@20220801-235247
-    nas_12tb/nas/media/tv_comedy_documentaries@20210101-020423
-    nas_12tb/nas/media/tv_comedy_documentaries@20210823-033128
-    nas_12tb/nas/media/tv_comedy_documentaries@20220801-235247
-    nas_12tb/nas/pictures@20210101-020423
-    nas_12tb/nas/pictures@20210823-033128
-    nas_12tb/nas/pictures@20220801-235247
-    nas_12tb/nas/projects@20210101-020423
-    nas_12tb/nas/projects@20210823-033128
-    nas_12tb/nas/projects@20220801-235247
-    nas_12tb/nas/software@20210101-020423
-    nas_12tb/nas/software@20210823-033128
-    nas_12tb/nas/software@20220801-235247
-    nas_12tb/nas/source@20210101-020423
-    nas_12tb/nas/source@20210823-033128
-    nas_12tb/nas/source@20220801-235247
-    """
-}
-
-extension ConsolidatorTest {
-  private func line(_ string: String = "") -> String {
-    "\(string)\n"
-  }
+    func testSnapshotsAfterUpperBoundAreNotDeleted() async throws {
+        let expect20220806IsNotDestroyed = expectation(description: "expect destroy 20220806")
+        expect20220806IsNotDestroyed.isInverted = true
+        let expect20220807IsNotDestroyed = expectation(description: "expect destroy 20220807")
+        expect20220807IsNotDestroyed.isInverted = true
+        let expect20220808IsNotDestroyed = expectation(description: "expect destroy 20220808")
+        expect20220808IsNotDestroyed.isInverted = true
+        let config = makeConfig(
+            schedule: .Builder(upperBound: testDateString)
+                .keepingSnapshots(1, every: 1, .weeks, repeatedBy: 1)
+                .build(),
+            snapshotsNotConsolidated: []
+        )
+        let shell = ShellAtPath { @Sendable (
+            _ command: ShellCommand,
+            _ dryRun: Bool,
+            _ estimatedOutputSize: Int?,
+            _ estimatedErrorSize: Int?,
+            _ statusesForResult: ShellTermination.StatusesForResult,
+            _ stream: ShellStream?,
+            _ timeout: TimeInterval?
+        ) async -> ShellResult in
+            switch command {
+            case "zfs list -o name -H | grep nas_12tb/nas/":
+                return .success(
+                    stdout: """
+                    nas_12tb/nas/documents
+                    """
+                )!
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/":
+                return .success(
+                    stdout: """
+                    nas_12tb/nas/documents@20220808-000000                  
+                    nas_12tb/nas/documents@20220807-000000                  
+                    nas_12tb/nas/documents@20220806-000000
+                    """
+                )!
+            case "zfs destroy nas_12tb/nas/documents@20220806-000000":
+                expect20220806IsNotDestroyed.fulfill()
+                return .success()
+            case "zfs destroy nas_12tb/nas/documents@20220807-000000":
+                expect20220807IsNotDestroyed.fulfill()
+                return .success()
+            case "zfs destroy nas_12tb/nas/documents@20220808-000000":
+                expect20220808IsNotDestroyed.fulfill()
+                return .success()
+            default:
+                XCTFail("unexpected command: \(command)")
+                return .success()
+            }
+        }
+        let consolidator = Consolidator(
+            calendar: calendar,
+            config: config,
+            date: { [testDate] in testDate },
+            dateFormatter: dateFormatter,
+            shell: shell
+        )
+        try await consolidator.consolidate()
+        await fulfillment(
+            of: [
+                expect20220806IsNotDestroyed,
+                expect20220807IsNotDestroyed,
+                expect20220808IsNotDestroyed,
+            ],
+            timeout: timeout
+        )
+    }
 }

@@ -1,64 +1,36 @@
 {
-  "snapshotsNotConsolidated": [],
-  "execute": true,
-  "datasetGrep": "nas_12tb/nas/",
-  "dateSeparator": "@",
-  "consolidationPeriod": {
-    "snapshotPeriodBias": {
-      "upperBound": {}
+    "schedule": {
+      "periods": [
+        {
+          "everyMultiple": 1,
+          "everyPeriod": "days",
+          "repetitions": 7,
+          "snapshots": 1
+        },
+        {
+          "everyMultiple": 1,
+          "everyPeriod": "weeks",
+          "repetitions": 3,
+          "snapshots": 1
+        },
+        {
+          "everyMultiple": 1,
+          "everyPeriod": "months",
+          "repetitions": 11,
+          "snapshots": 1
+        },
+        {
+          "everyMultiple": 1,
+          "everyPeriod": "years",
+          "snapshots": 1
+        }
+      ],
+      "upperBound": "20220806-000000"
     },
-    "upperBound": 681109200,
-    "snapshotPeriods": [
-      {
-        "snapshots": 7,
-        "frequency": [
-          {
-            "day": {
-              "_0": 1
-            }
-          }
-        ]
-      },
-      {
-        "snapshots": 3,
-        "frequency": [
-          {
-            "weekOfYear": {
-              "_0": 1
-            }
-          }
-        ]
-      },
-      {
-        "snapshots": 11,
-        "frequency": [
-          {
-            "month": {
-              "_0": 1
-            }
-          }
-        ]
-      },
-      {
-        "snapshots": 4,
-        "frequency": [
-          {
-            "month": {
-              "_0": 3
-            }
-          }
-        ]
-      },
-      {
-        "snapshots": 97,
-        "frequency": [
-          {
-            "year": {
-              "_0": 1
-            }
-          }
-        ]
-      }
-    ]
-  }
+    "datasetGrep": "nas_12tb/nas/",
+    "dateSeparator": "@",
+    "execute": true,
+    "lineSeparator": "\n",
+    "snapshotsNotConsolidated": [],
+    "stringEncodingRawValue": 4
 }
