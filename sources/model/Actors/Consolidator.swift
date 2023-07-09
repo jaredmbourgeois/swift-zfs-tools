@@ -142,14 +142,14 @@ public actor Consolidator {
 
 extension Consolidator {
   public struct Config: Codable, Sendable, Equatable {
-    public let datasetGrep: String
+    public let datasetGrep: String?
     public let dateSeparator: String
     public let snapshotsNotConsolidated: [String]
     public let consolidationPeriod: ConsolidationPeriod
     public let execute: Bool
 
     public init(
-      datasetGrep: String,
+      datasetGrep: String?,
       dateSeparator: String,
       snapshotsNotConsolidated: [String],
       consolidationPeriod: ConsolidationPeriod,
@@ -169,15 +169,6 @@ extension Consolidator {
       dateFormatter: DateFormatter,
       date: () -> Date
     ) throws {
-      if let configPath = arguments.configPath {
-        self = try decodeFromJsonAtPath(
-          configPath,
-          fileManager: fileManager,
-          jsonDecoder: jsonDecoder
-        )
-        return
-      }
-
       let snapshotsNotConsolidated: [String]
       if let doNotDeleteSnapshotsPath = arguments.doNotDeleteSnapshotsPath {
         snapshotsNotConsolidated = try decodeFromJsonAtPath(

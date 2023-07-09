@@ -51,3 +51,29 @@ struct ConsolidateConfigure: ParsableCommand {
     )
   }
 }
+
+struct ConsolidateConfigured: ParsableCommand {
+  @OptionGroup()
+  var arguments: Arguments.ConsolidateConfigured
+
+  func run() async throws {
+    let fileManager = FileManager.default
+    let jsonDecoder = JSONDecoder()
+    let config: Consolidator.Config = try decodeFromJsonAtPath(
+      arguments.configPath,
+      fileManager: fileManager,
+      jsonDecoder: jsonDecoder
+    )
+    let calendar = Calendar.current
+    let dateFormatter = DateFormatter()
+    dateFormatter.calendar = calendar
+    dateFormatter.dateFormat = arguments.common.dateFormat ?? Defaults.dateFormat
+    let consolidator = Consolidator(
+      shell: Shell.Executor(arguments: arguments.common),
+      config: config,
+      calendar: calendar,
+      dateFormatter: dateFormatter
+    )
+    try await consolidator.consolidate()
+  }
+}

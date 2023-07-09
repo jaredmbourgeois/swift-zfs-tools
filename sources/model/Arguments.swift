@@ -66,17 +66,14 @@ extension Arguments {
     @OptionGroup(title: Common.optionGroupTitle)
     public var common: Common
 
-    @Option(help: "The path for a Consolidator.Config JSON file. Overrides all other options. Consolidate will fail if file is not found.")
-    public var configPath: String?
-
     @Option(help: "The path for a ConsolidationPeriod JSON file. Consolidate will fail if file is not found.")
     public var consolidationPeriodPath: String?
 
     @Option(help: "The upperBound for the ConsolidationPeriod. Date will be parsed using the run's date format. Consolidate will fail if date cannot be parsed. Defaults to the run time.")
     public var consolidationPeriodUpperBound: String?
 
-    @Option(help: "ZFS snapshot dataset root to consolidate, eg nas/documents")
-    public var datasetGrep: String
+    @Option(help: "Consolidate snapshots for datasets containing this pattern. All datasets are synced if no pattern is provided.")
+    public var datasetGrep: String?
 
     @Option(help: "The path for a JSON array of ZFS snapshot names that will not be deleted, even if they would've been on consolidation.")
     public var doNotDeleteSnapshotsPath: String?
@@ -90,6 +87,16 @@ extension Arguments {
 
     @Option(help: "The output path for the Consolidator.Config JSON file.")
     public var outputPath: String
+
+    public init() {}
+  }
+
+  public struct ConsolidateConfigured: ParsableArguments {
+    @OptionGroup(title: Common.optionGroupTitle)
+    public var common: Common
+
+    @Option(help: "Full path, including name, of a Consolidator.Config JSON; .json will be appended if not provided. eg /path/to/snapshot-config/nas_consolidate")
+    public var configPath: String
 
     public init() {}
   }
@@ -118,6 +125,16 @@ extension Arguments {
 
     public init() {}
   }
+
+  public struct SnapshotConfigured: ParsableArguments {
+    @OptionGroup(title: Common.optionGroupTitle)
+    public var common: Common
+
+    @Option(help: "Full path, including name, of a Snapshotter.Config JSON; .json will be appended if not provided. eg /path/to/snapshot-config/nas_snapshot")
+    public var configPath: String
+
+    public init() {}
+  }
 }
 
 extension Arguments {
@@ -125,7 +142,7 @@ extension Arguments {
     @OptionGroup(title: Common.optionGroupTitle)
     public var common: Common
 
-    @Option(help: "Datasets to sync containing this pattern. All datasets are synced if no pattern is provided.")
+    @Option(help: "Sync snapshots for datasets containing this pattern. All datasets are synced if no pattern is provided.")
     public var datasetGrep: String?
 
     @Option(help: "SSH port for remote.")
@@ -149,6 +166,16 @@ extension Arguments {
 
     @Option(help: "The output path for the Syncer.Config JSON file; please include full path, .json extension will be appeneded if needed.")
     public var outputPath: String
+
+    public init() {}
+  }
+
+  public struct SyncConfigured: ParsableArguments {
+    @OptionGroup(title: Common.optionGroupTitle)
+    public var common: Common
+
+    @Option(help: "Full path, including name, of a Syncer.Config JSON; .json will be appended if not provided. eg /path/to/snapshot-config/nas_sync")
+    public var configPath: String
 
     public init() {}
   }
