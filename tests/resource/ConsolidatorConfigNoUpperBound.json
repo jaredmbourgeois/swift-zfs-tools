@@ -24,8 +24,7 @@
           "everyPeriod": "years",
           "snapshots": 1
         }
-      ],
-      "upperBound": "20220806-000000"
+      ]
     },
     "datasetGrep": "nas_12tb/nas/",
     "dateSeparator": "@",

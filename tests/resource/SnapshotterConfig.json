@@ -1,6 +1,8 @@
 {
   "execute": false,
+  "datasetGrep": "nas_12tb/nas",
   "dateSeparator": "@",
-  "dataset": "nas_12tb/nas",
+  "lineSeparator": "\n",
   "recursive": true,
+  "stringEncodingRawValue": 4
 }

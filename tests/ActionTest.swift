@@ -1,9 +1,16 @@
+// ActionTest.swift is part of the swift-zfs-tools open source project.
+//
+// Copyright © 2025 Jared Bourgeois
+//
+// Licensed under Apache License v2.0 with Runtime Library Exception
+//
+
 import Foundation
 import XCTest
 
 @testable import ZFSToolsModel
 
-class ActionTest: XCTestCase {
+final class ActionTest: XCTestCase {
   func testEncode() throws {
     let data = try JSONEncoder().encode(Self.actions)
     let string = String(data: data, encoding: .utf8)
@@ -17,7 +24,7 @@ class ActionTest: XCTestCase {
   }
 
   func testFromJSON() throws {
-    let actions: [Action] = decodeResource(named: "Actions", fileManager: .default)
+      let actions: [Action] = decodeResourceJSON(named: "Actions", fileManager: .default, jsonDecoder: JSONDecoder())
     XCTAssertEqual(Self.actions, actions)
   }
 }

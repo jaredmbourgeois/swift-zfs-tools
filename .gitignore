@@ -1,7 +1,8 @@
-.DS_Store
+make_bins.sh
 /.build
 /build
 DerivedData/
+.DS_Store
 .idea
 .netrc
 Package.resolved
