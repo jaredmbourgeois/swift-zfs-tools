@@ -1,0 +1,64 @@
+{
+  "snapshotsNotConsolidated": [],
+  "execute": true,
+  "datasetGrep": "nas_12tb/nas/",
+  "dateSeparator": "@",
+  "consolidationPeriod": {
+    "snapshotPeriodBias": {
+      "upperBound": {}
+    },
+    "upperBound": 681109200,
+    "snapshotPeriods": [
+      {
+        "snapshots": 7,
+        "frequency": [
+          {
+            "day": {
+              "_0": 1
+            }
+          }
+        ]
+      },
+      {
+        "snapshots": 3,
+        "frequency": [
+          {
+            "weekOfYear": {
+              "_0": 1
+            }
+          }
+        ]
+      },
+      {
+        "snapshots": 11,
+        "frequency": [
+          {
+            "month": {
+              "_0": 1
+            }
+          }
+        ]
+      },
+      {
+        "snapshots": 4,
+        "frequency": [
+          {
+            "month": {
+              "_0": 3
+            }
+          }
+        ]
+      },
+      {
+        "snapshots": 97,
+        "frequency": [
+          {
+            "year": {
+              "_0": 1
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
