@@ -38,26 +38,30 @@ class ConsolidatorConfigTest: XCTestCase {
 
   func testConfigFromJSON() {
     XCTAssertEqual(defaultConfig, decodeResource(named: "ConsolidatorConfig", fileManager: fileManager))
+    XCTAssertEqual(
+      Self.config(
+        date: nil,
+        dateFormatter: dateFormatter,
+        fileManager: fileManager
+      ),
+      decodeResource(named: "ConsolidatorConfigNoUpperBound", fileManager: fileManager)
+    )
   }
 }
 
 extension ConsolidatorConfigTest {
   static func config(
-    arguments: Arguments.Consolidate? = nil,
     consolidationPeriod: Consolidator.ConsolidationPeriod? = nil,
+    date: Date? = defaultConfigDate,
     dateFormatter: DateFormatter,
     fileManager: FileManager
   ) -> Consolidator.Config {
-    let arguments = try! arguments ?? .parse([
-      "--dataset-grep", "nas_12tb/nas/",
-      "--execute", "true"
-    ])
-    return try! Consolidator.Config(
-      arguments: arguments,
-      fileManager: fileManager,
-      jsonDecoder: JSONDecoder(),
-      dateFormatter: dateFormatter,
-      date: { defaultConfigDate }
+    .init(
+      datasetGrep: "nas_12tb/nas/",
+      dateSeparator: "@",
+      snapshotsNotConsolidated: [],
+      consolidationPeriod: consolidationPeriod ?? Defaults.consolidationPeriod(upperBound: date),
+      execute: true
     )
   }
 

@@ -29,6 +29,7 @@ public actor ActionExecutor {
   }
 
   public func execute(_ actions: [Action]) async throws {
+    let date: @Sendable () -> Date = { .now }
     for action in actions {
       switch action {
       case .consolidate(let configPath):
@@ -40,7 +41,8 @@ public actor ActionExecutor {
             jsonDecoder: jsonDecoder
           ),
           calendar: calendar,
-          dateFormatter: dateFormatter
+          dateFormatter: dateFormatter,
+          date: date
         ).consolidate()
 
       case .snapshot(let configPath):
@@ -52,7 +54,7 @@ public actor ActionExecutor {
             jsonDecoder: jsonDecoder
           ),
           dateFormatter: dateFormatter,
-          date: { .now }
+          date: date
         ).snapshot()
 
       case .sync(let configPath):

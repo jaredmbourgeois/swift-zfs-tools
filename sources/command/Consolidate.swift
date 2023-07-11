@@ -12,17 +12,18 @@ struct Consolidate: AsyncParsableCommand {
     let dateFormatter = DateFormatter()
     dateFormatter.calendar = calendar
     dateFormatter.dateFormat = arguments.common.dateFormat ?? Defaults.dateFormat
+    let date: @Sendable () -> Date = { .now }
     let consolidator = Consolidator(
       shell: Shell.Executor(arguments: arguments.common),
       config: try Consolidator.Config(
         arguments: arguments,
         fileManager: .default,
         jsonDecoder: .init(),
-        dateFormatter: dateFormatter,
-        date: { .now }
+        dateFormatter: dateFormatter
       ),
       calendar: calendar,
-      dateFormatter: dateFormatter
+      dateFormatter: dateFormatter,
+      date: date
     )
     try await consolidator.consolidate()
   }
@@ -42,8 +43,7 @@ struct ConsolidateConfigure: ParsableCommand {
         arguments: arguments.consolidate,
         fileManager: fileManager,
         jsonDecoder: .init(),
-        dateFormatter: dateFormatter,
-        date: { .now }
+        dateFormatter: dateFormatter
       ),
       toJsonAtPath: arguments.outputPath,
       fileManager: fileManager,
@@ -68,11 +68,13 @@ struct ConsolidateConfigured: ParsableCommand {
     let dateFormatter = DateFormatter()
     dateFormatter.calendar = calendar
     dateFormatter.dateFormat = arguments.common.dateFormat ?? Defaults.dateFormat
+    let date: @Sendable () -> Date = { .now }
     let consolidator = Consolidator(
       shell: Shell.Executor(arguments: arguments.common),
       config: config,
       calendar: calendar,
-      dateFormatter: dateFormatter
+      dateFormatter: dateFormatter,
+      date: date
     )
     try await consolidator.consolidate()
   }

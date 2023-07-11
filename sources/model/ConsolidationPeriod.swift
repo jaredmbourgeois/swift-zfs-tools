@@ -1,36 +1,16 @@
 import Foundation
 
-extension Date: @unchecked Sendable { }
+extension Date: @unchecked Sendable {}
 
 extension Consolidator {
   public struct ConsolidationPeriod: Codable, Hashable, Sendable {
-    public let snapshotPeriods: SnapshotPeriods
+    public let snapshotPeriods: [SnapshotPeriod]
     public let snapshotPeriodBias: Consolidator.SnapshotPeriod.Bias
-    public let upperBound: Date
-
-    public static func makeStandard(upperBound: Date) -> ConsolidationPeriod {
-      Consolidator.ConsolidationPeriod.ConsolidationPeriodBuilder(upperBound: upperBound)
-        .snapshotPeriod(snapshots: 7)
-          .with(days: 1)
-          .snapshotPeriodComplete()
-        .snapshotPeriod(snapshots: 3)
-          .with(weeksOfYear: 1)
-          .snapshotPeriodComplete()
-        .snapshotPeriod(snapshots: 11)
-          .with(months: 1)
-          .snapshotPeriodComplete()
-        .snapshotPeriod(snapshots: 4)
-          .with(months: 3)
-          .snapshotPeriodComplete()
-        .snapshotPeriod(snapshots: 97)
-          .with(years: 1)
-          .snapshotPeriodComplete()
-        .build()
-    }
+    public let upperBound: Date?
 
     fileprivate init(
-      upperBound: Date,
-      snapshotPeriods: SnapshotPeriods,
+      upperBound: Date?,
+      snapshotPeriods: [SnapshotPeriod],
       snapshotPeriodBias: Consolidator.SnapshotPeriod.Bias
     ) {
       self.upperBound = upperBound
@@ -61,14 +41,14 @@ extension Consolidator.ConsolidationPeriod {
 
 extension Consolidator.ConsolidationPeriod {
   public class ConsolidationPeriodBuilder {
-    private let upperBound: Date
+    private let upperBound: Date?
     private let snapshotPeriodBias: Consolidator.SnapshotPeriod.Bias
 
-    private var snapshotPeriods = Consolidator.SnapshotPeriods()
+    private var snapshotPeriods = [Consolidator.SnapshotPeriod]()
     private var snapshotPeriod: Consolidator.SnapshotPeriod?
 
     public init(
-      upperBound: Date,
+      upperBound: Date?,
       snapshotPeriodBias: Consolidator.SnapshotPeriod.Bias = .upperBound
     ) {
       self.upperBound = upperBound
