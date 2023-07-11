@@ -7,17 +7,20 @@ public actor Consolidator {
   private let config: Config
   private let calendar: Calendar
   private let dateFormatter: DateFormatter
+  private let date: @Sendable () -> Date
 
   public init(
     shell: ShellExecutor,
     config: Config,
     calendar: Calendar,
-    dateFormatter: DateFormatter
+    dateFormatter: DateFormatter,
+    date: @escaping @Sendable () -> Date
   ) {
     self.shell = shell
     self.config = config
     self.calendar = calendar
     self.dateFormatter = dateFormatter
+    self.date = date
   }
 
   public func consolidate() async throws {
@@ -119,7 +122,7 @@ public actor Consolidator {
 
   private func snapshotsToDelete(_ snapshots: [String]) async -> [String] {
     let snapshotAndDatesSortedByMostRecent = snapshotAndDatesSortedByMostRecent(from: snapshots)
-    var upperBound = config.consolidationPeriod.upperBound
+    var upperBound = config.consolidationPeriod.upperBound ?? date()
     let snapshotPeriodRanges = config.consolidationPeriod.snapshotPeriods.map { snapshotPeriod in
       self.snapshotPeriodRanges(snapshotPeriod, upperBound: &upperBound)
     }
@@ -166,8 +169,7 @@ extension Consolidator {
       arguments: Arguments.Consolidate,
       fileManager: FileManager,
       jsonDecoder: JSONDecoder,
-      dateFormatter: DateFormatter,
-      date: () -> Date
+      dateFormatter: DateFormatter
     ) throws {
       let snapshotsNotConsolidated: [String]
       if let doNotDeleteSnapshotsPath = arguments.doNotDeleteSnapshotsPath {
@@ -188,16 +190,16 @@ extension Consolidator {
           jsonDecoder: jsonDecoder
         )
       } else {
-        let upperBound: Date
+        let upperBound: Date?
         if let arg = arguments.consolidationPeriodUpperBound {
           guard let date = dateFormatter.date(from: arg) else {
             throw ErrorType.dateFormat(string: arg, format: dateFormatter.dateFormat)
           }
           upperBound = date
         } else {
-          upperBound = date()
+          upperBound = nil
         }
-        period = .makeStandard(upperBound: upperBound)
+        period = Defaults.consolidationPeriod(upperBound: upperBound)
       }
       datasetGrep = arguments.datasetGrep
       dateSeparator = arguments.common.dateSeparator ?? Defaults.dateSeparator

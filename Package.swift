@@ -39,7 +39,7 @@ enum Dependency: String {
     switch self {
     case .algorithms: return "1.0.0"
     case .argumentParser: return "1.2.2"
-    case .shell: return "1.1.1"
+    case .shell: return "1.1.2"
     }
   }
 

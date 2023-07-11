@@ -43,24 +43,21 @@ public actor Syncer {
   }
 
   private func sendSnapshots(_ datasets: [Dataset]) async throws {
-    try await withThrowingTaskGroup(of: Void.self) { taskGroup in
-      for dataset in datasets {
-        taskGroup.addTask {
-          for send in await self.sendsForDataset(dataset) {
-            for destroy in send.destroy {
-              try await self.shell.sudo(
-                self.remote(.destroy(subject: destroy.snapshot)),
-                execute: self.config.execute
-              )
-            }
-            try await self.shell.sudo(
-              self.zfsSend(send),
-              execute: self.config.execute
-            )
-          }
+    // send and receive sequentially since ZFS receive locks dataset and its descendents
+    // https://docs.oracle.com/cd/E18752_01/html/819-5461/gbchx.html
+    for dataset in datasets {
+      for send in self.sendsForDataset(dataset) {
+        for destroy in send.destroy {
+          try await self.shell.sudo(
+            self.remote(.destroy(subject: destroy.snapshot)),
+            execute: self.config.execute
+          )
         }
+        try await self.shell.sudo(
+          self.zfsSend(send),
+          execute: self.config.execute
+        )
       }
-      try await taskGroup.waitForAll()
     }
   }
 

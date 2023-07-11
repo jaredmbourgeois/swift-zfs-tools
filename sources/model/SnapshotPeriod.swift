@@ -19,10 +19,6 @@ extension Consolidator {
       return lowerBound..<upperBound
     }
   }
-
-  /// SnapshotPeriods are traversed first to last, going backward in time from start date.
-  /// See `SnapshotPeriods.dateRanges(startingOn date: Date) -> [Range<Date>]`
-  public typealias SnapshotPeriods = [SnapshotPeriod]
 }
 
 extension Consolidator.SnapshotPeriod {

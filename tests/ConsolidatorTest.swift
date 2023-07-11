@@ -305,7 +305,8 @@ extension ConsolidatorTest {
         fileManager: .default
       ),
       calendar: calendar,
-      dateFormatter: dateFormatter
+      dateFormatter: dateFormatter,
+      date: { self.upperBound }
     )
     return (shell, consolidator)
   }
