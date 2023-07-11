@@ -52,7 +52,7 @@ struct ConsolidateConfigure: ParsableCommand {
   }
 }
 
-struct ConsolidateConfigured: ParsableCommand {
+struct ConsolidateConfigured: AsyncParsableCommand {
   @OptionGroup()
   var arguments: Arguments.ConsolidateConfigured
 
