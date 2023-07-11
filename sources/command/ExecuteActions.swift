@@ -32,11 +32,11 @@ struct ExecuteActions: AsyncParsableCommand {
   }
 }
 
-struct ExecuteActionsConfigure: AsyncParsableCommand {
+struct ExecuteActionsConfigure: ParsableCommand {
   @OptionGroup()
   var arguments: Arguments.ExecuteActionsConfigure
 
-  func run() async throws {
+  func run() throws {
     try encode(
       [
         Action.snapshot(configPath: "/path/to/snapshot/config.json"),
