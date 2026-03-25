@@ -141,6 +141,74 @@ public struct Consolidator: Sendable {
                 dryRun: !config.execute
             ).get()
         }
+        if config.maxPoolUtilizationPercent != nil || config.minFreeBytes != nil,
+           let pool = PoolUtilization.poolName(from: config.datasetGrep) {
+            let utilization = try await PoolUtilization.query(
+                pool: pool,
+                shell: shell,
+                dryRun: !config.execute,
+                stringEncoding: config.stringEncoding,
+                lineSeparator: config.lineSeparator
+            )
+            if utilization.exceedsThreshold(
+                maxCapacityPercent: config.maxPoolUtilizationPercent,
+                minFreeBytes: config.minFreeBytes
+            ) {
+                print("zfs-tools consolidate: WARNING — pool \(pool) utilization exceeds threshold after consolidation (capacity: \(utilization.capacityPercent)%, available: \(utilization.availableBytes) bytes). Running aggressive pruning.")
+                try await aggressivePrune(
+                    pool: pool,
+                    datasetsLocal: datasetsLocal,
+                    snapshotsLocal: snapshotsLocal
+                )
+            }
+        }
+    }
+
+    private func aggressivePrune(
+        pool: String,
+        datasetsLocal: [String],
+        snapshotsLocal: [String]
+    ) async throws {
+        var allSnapshotAndDates: [SnapshotAndDate] = try snapshotsLocal
+            .compactMap { snapshot in
+                guard datasetsLocal.contains(where: { snapshot.hasPrefix($0 + config.dateSeparator) }) else {
+                    return nil
+                }
+                return SnapshotAndDate(
+                    snapshot: snapshot,
+                    date: try dateFormatter.dateForSnapshot(snapshot, dateSeparator: config.dateSeparator)
+                )
+            }
+            .sorted { $0.date < $1.date }
+        // Keep at least one snapshot per dataset
+        var newestByDataset = [String: SnapshotAndDate]()
+        for snapshotAndDate in allSnapshotAndDates {
+            let dataset = String(snapshotAndDate.snapshot.split(separator: config.dateSeparator).first ?? "")
+            newestByDataset[dataset] = snapshotAndDate
+        }
+        let protectedSnapshots = Set(newestByDataset.values.map(\.snapshot))
+        allSnapshotAndDates.removeAll { protectedSnapshots.contains($0.snapshot) || config.snapshotsNotConsolidated.contains($0.snapshot) }
+        for snapshotAndDate in allSnapshotAndDates {
+            let utilization = try await PoolUtilization.query(
+                pool: pool,
+                shell: shell,
+                dryRun: !config.execute,
+                stringEncoding: config.stringEncoding,
+                lineSeparator: config.lineSeparator
+            )
+            guard utilization.exceedsThreshold(
+                maxCapacityPercent: config.maxPoolUtilizationPercent,
+                minFreeBytes: config.minFreeBytes
+            ) else {
+                print("zfs-tools consolidate: pool \(pool) utilization now within threshold (capacity: \(utilization.capacityPercent)%). Aggressive pruning complete.")
+                return
+            }
+            print("zfs-tools consolidate: aggressive prune — destroying \(snapshotAndDate.snapshot) (capacity: \(utilization.capacityPercent)%)")
+            _ = try await shell.execute(
+                ZFS.destroy(subject: snapshotAndDate.snapshot),
+                dryRun: !config.execute
+            ).get()
+        }
     }
 
     private struct DateRangeAndSnapshotCount {
@@ -230,6 +298,8 @@ extension Consolidator {
         public let dateSeparator: String
         public let execute: Bool
         public let lineSeparator: String
+        public let maxPoolUtilizationPercent: Float?
+        public let minFreeBytes: Int64?
         public let schedule: SnapshotConsolidationSchedule
         public let snapshotsNotConsolidated: [String]
         public let stringEncodingRawValue: UInt
@@ -240,6 +310,8 @@ extension Consolidator {
             dateSeparator: String,
             execute: Bool,
             lineSeparator: String,
+            maxPoolUtilizationPercent: Float? = nil,
+            minFreeBytes: Int64? = nil,
             schedule: SnapshotConsolidationSchedule,
             snapshotsNotConsolidated: [String],
             stringEncoding: String.Encoding
@@ -248,6 +320,8 @@ extension Consolidator {
             self.dateSeparator = dateSeparator
             self.execute = execute
             self.lineSeparator = lineSeparator
+            self.maxPoolUtilizationPercent = maxPoolUtilizationPercent
+            self.minFreeBytes = minFreeBytes
             self.schedule = schedule
             self.snapshotsNotConsolidated = snapshotsNotConsolidated
             self.stringEncodingRawValue = stringEncoding.rawValue
@@ -263,6 +337,8 @@ extension Consolidator {
             dateSeparator = arguments.common.dateSeparator ?? Defaults.dateSeparator
             execute = arguments.common.execute ?? Defaults.execute
             lineSeparator = arguments.common.lineSeparator ?? Defaults.lineSeparator
+            maxPoolUtilizationPercent = arguments.maxPoolUtilization
+            minFreeBytes = arguments.minFreeBytes
             schedule = if let consolidationPeriodPath = arguments.consolidationPeriodPath {
                 try decodeFromJSONAtPath(
                     consolidationPeriodPath,
@@ -293,6 +369,25 @@ extension Consolidator {
                 []
             }
             stringEncodingRawValue = arguments.common.stringEncodingRawValue ?? Defaults.stringEncoding.rawValue
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case datasetGrep, dateSeparator, execute, lineSeparator
+            case maxPoolUtilizationPercent, minFreeBytes
+            case schedule, snapshotsNotConsolidated, stringEncodingRawValue
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            datasetGrep = try container.decodeIfPresent(String.self, forKey: .datasetGrep)
+            dateSeparator = try container.decode(String.self, forKey: .dateSeparator)
+            execute = try container.decode(Bool.self, forKey: .execute)
+            lineSeparator = try container.decode(String.self, forKey: .lineSeparator)
+            maxPoolUtilizationPercent = try container.decodeIfPresent(Float.self, forKey: .maxPoolUtilizationPercent)
+            minFreeBytes = try container.decodeIfPresent(Int64.self, forKey: .minFreeBytes)
+            schedule = try container.decode(SnapshotConsolidationSchedule.self, forKey: .schedule)
+            snapshotsNotConsolidated = try container.decode([String].self, forKey: .snapshotsNotConsolidated)
+            stringEncodingRawValue = try container.decode(UInt.self, forKey: .stringEncodingRawValue)
         }
     }
 }

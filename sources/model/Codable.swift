@@ -39,7 +39,7 @@ public func encode<T: Encodable>(
     do {
         data = try jsonEncoder.encode(encodable)
     } catch {
-        throw ErrorType.jsonEndcodeFailed(type: T.self, error: error, path: path)
+        throw ErrorType.jsonEncodeFailed(type: T.self, error: error, path: path)
     }
     do {
         try data.write(to: url)

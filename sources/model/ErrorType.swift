@@ -29,7 +29,7 @@ public enum ErrorType: Error, CustomDebugStringConvertible {
     }
 
     case jsonEncodeFailed(type: String, error: any Error, path: String, location: String)
-    public static func jsonEndcodeFailed<T>(type: T.Type, error: any Error, path: String, file: String = #file, function: String = #function, line: Int = #line) -> Self {
+    public static func jsonEncodeFailed<T>(type: T.Type, error: any Error, path: String, file: String = #file, function: String = #function, line: Int = #line) -> Self {
         .jsonEncodeFailed(type: String(reflecting: type), error: error, path: path, location: location(file: file, function: function, line: line))
     }
 

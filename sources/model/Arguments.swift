@@ -91,6 +91,14 @@ extension Arguments {
         public var doNotDeleteSnapshotsPath: String?
         public static let doNotDeleteSnapshotsPathHelp = "The path for a JSON array of ZFS snapshot names that will not be deleted, even if they would've been on consolidation."
 
+        @Option(help: "\(Self.maxPoolUtilizationHelp)")
+        public var maxPoolUtilization: Float?
+        public static let maxPoolUtilizationHelp = "Maximum pool utilization percentage (0-100). Triggers aggressive pruning after consolidation if exceeded."
+
+        @Option(help: "\(Self.minFreeBytesHelp)")
+        public var minFreeBytes: Int64?
+        public static let minFreeBytesHelp = "Minimum free bytes on pool. Triggers aggressive pruning after consolidation if below threshold."
+
         public init() {}
     }
 
@@ -124,7 +132,15 @@ extension Arguments {
 
         @Option(help: "\(Self.datasetGrepHelp)")
         public var datasetGrep: String?
-        public static let datasetGrepHelp = "Takes snapshots for datasets containig this pattern or all datasets if no pattern is provided."
+        public static let datasetGrepHelp = "Takes snapshots for datasets containing this pattern or all datasets if no pattern is provided."
+
+        @Option(help: "\(Self.maxPoolUtilizationHelp)")
+        public var maxPoolUtilization: Float?
+        public static let maxPoolUtilizationHelp = "Maximum pool utilization percentage (0-100). Snapshots are skipped if exceeded."
+
+        @Option(help: "\(Self.minFreeBytesHelp)")
+        public var minFreeBytes: Int64?
+        public static let minFreeBytesHelp = "Minimum free bytes on pool. Snapshots are skipped if below threshold."
 
         @Option(help: "\(Self.recursiveHelp)")
         public var recursive: Bool?
@@ -139,7 +155,7 @@ extension Arguments {
 
         @Option(help: "\(Self.outputPathHelp)")
         public var outputPath: String
-        public static let outputPathHelp = "The output path for the Snapshotter.Config JSON; please include full path, .json extension will be appeneded if needed."
+        public static let outputPathHelp = "The output path for the Snapshotter.Config JSON; please include full path, .json extension will be appended if needed."
 
         public init() {}
     }
@@ -190,7 +206,7 @@ extension Arguments {
 
         @Option(help: "\(Self.outputPathHelp)")
         public var outputPath: String
-        public static let outputPathHelp = "The output path for the Syncer.Config JSON file; please include full path, .json extension will be appeneded if needed."
+        public static let outputPathHelp = "The output path for the Syncer.Config JSON file; please include full path, .json extension will be appended if needed."
 
         public init() {}
     }

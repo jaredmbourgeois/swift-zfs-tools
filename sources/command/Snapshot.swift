@@ -15,9 +15,7 @@ struct Snapshot: AsyncParsableCommand {
     var arguments: Arguments.Snapshot
 
     func run() async throws {
-        let dateFormatter = DateFormatter()
-        dateFormatter.calendar = .current
-        dateFormatter.dateFormat = arguments.common.dateFormat ?? Defaults.dateFormat
+        let dateFormatter = makeDateFormatter(arguments.common.dateFormat ?? Defaults.dateFormat)
         let snapshotter = Snapshotter(
             config: .init(arguments: arguments),
             date: { .now },
@@ -52,9 +50,7 @@ struct SnapshotConfigured: AsyncParsableCommand {
             fileManager: .default,
             jsonDecoder: .init()
         )
-        let dateFormatter = DateFormatter()
-        dateFormatter.calendar = .current
-        dateFormatter.dateFormat = arguments.common.dateFormat ?? Defaults.dateFormat
+        let dateFormatter = makeDateFormatter(arguments.common.dateFormat ?? Defaults.dateFormat)
         let snapshotter = Snapshotter(
             config: config,
             date: { .now },
