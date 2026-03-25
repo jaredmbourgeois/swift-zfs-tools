@@ -124,6 +124,18 @@ enum ZFS {
         command += " \(dataset)\(dateSeparator)\(dateFormatter.string(from: date))"
         return command
     }
+
+    /// Returns pool capacity as integer percentage (0-100).
+    /// Output: single integer, e.g. "42"
+    static func poolCapacity(pool: String) -> String {
+        "zpool list -Hp -o capacity \(pool)"
+    }
+
+    /// Returns used and available bytes for a dataset/pool.
+    /// Output: tab-separated "used\tavailable", e.g. "1234567890\t9876543210"
+    static func listUsedAvailable(dataset: String) -> String {
+        "zfs list -Hp -o used,available \(dataset)"
+    }
 }
 
 extension TimeInterval {

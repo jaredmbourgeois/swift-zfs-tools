@@ -27,6 +27,23 @@ public struct Snapshotter: Sendable {
     }
 
     public func snapshot() async throws {
+        if config.maxPoolUtilizationPercent != nil || config.minFreeBytes != nil,
+           let pool = PoolUtilization.poolName(from: config.datasetGrep) {
+            let utilization = try await PoolUtilization.query(
+                pool: pool,
+                shell: shell,
+                dryRun: !config.execute,
+                stringEncoding: .init(rawValue: config.stringEncodingRawValue),
+                lineSeparator: config.lineSeparator
+            )
+            if utilization.exceedsThreshold(
+                maxCapacityPercent: config.maxPoolUtilizationPercent,
+                minFreeBytes: config.minFreeBytes
+            ) {
+                print("zfs-tools snapshot: WARNING — pool \(pool) utilization exceeds threshold (capacity: \(utilization.capacityPercent)%, available: \(utilization.availableBytes) bytes). Skipping snapshot creation.")
+                return
+            }
+        }
         let datasets = try await shell.execute(
             ZFS.listDatasets(grepping: config.datasetGrep),
             dryRun: !config.execute
@@ -65,6 +82,8 @@ extension Snapshotter {
         public let dateSeparator: String
         public let execute: Bool
         public let lineSeparator: String
+        public let maxPoolUtilizationPercent: Float?
+        public let minFreeBytes: Int64?
         public let recursive: Bool
         public let stringEncodingRawValue: String.Encoding.RawValue
 
@@ -73,6 +92,8 @@ extension Snapshotter {
             dateSeparator: String,
             execute: Bool,
             lineSeparator: String,
+            maxPoolUtilizationPercent: Float? = nil,
+            minFreeBytes: Int64? = nil,
             recursive: Bool,
             stringEncodingRawValue: String.Encoding.RawValue
         ) {
@@ -80,6 +101,8 @@ extension Snapshotter {
             self.dateSeparator = dateSeparator
             self.execute = execute
             self.lineSeparator = lineSeparator
+            self.maxPoolUtilizationPercent = maxPoolUtilizationPercent
+            self.minFreeBytes = minFreeBytes
             self.recursive = recursive
             self.stringEncodingRawValue = stringEncodingRawValue
         }
@@ -91,8 +114,28 @@ extension Snapshotter {
             dateSeparator = arguments.common.dateSeparator ?? Defaults.dateSeparator
             execute = arguments.common.execute ?? Defaults.execute
             lineSeparator = arguments.common.lineSeparator ?? Defaults.lineSeparator
+            maxPoolUtilizationPercent = arguments.maxPoolUtilization
+            minFreeBytes = arguments.minFreeBytes
             recursive = arguments.recursive ?? Defaults.recursive
             stringEncodingRawValue = arguments.common.stringEncodingRawValue ?? Defaults.stringEncoding.rawValue
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case datasetGrep, dateSeparator, execute, lineSeparator
+            case maxPoolUtilizationPercent, minFreeBytes
+            case recursive, stringEncodingRawValue
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            datasetGrep = try container.decodeIfPresent(String.self, forKey: .datasetGrep)
+            dateSeparator = try container.decode(String.self, forKey: .dateSeparator)
+            execute = try container.decode(Bool.self, forKey: .execute)
+            lineSeparator = try container.decode(String.self, forKey: .lineSeparator)
+            maxPoolUtilizationPercent = try container.decodeIfPresent(Float.self, forKey: .maxPoolUtilizationPercent)
+            minFreeBytes = try container.decodeIfPresent(Int64.self, forKey: .minFreeBytes)
+            recursive = try container.decode(Bool.self, forKey: .recursive)
+            stringEncodingRawValue = try container.decode(String.Encoding.RawValue.self, forKey: .stringEncodingRawValue)
         }
     }
 }
