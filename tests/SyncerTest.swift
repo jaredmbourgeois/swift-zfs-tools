@@ -37,14 +37,14 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas":
+            case "zfs list -o name -H | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents
                         nas_12tb/nas/documents-alt
                         """
                 )!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas":
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220805-000000
@@ -54,7 +54,7 @@ final class SyncerTest: XCTestCase {
                         nas_12tb/nas/documents-alt@20220801-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas":
+            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220804-000000
@@ -123,13 +123,13 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas":
+            case "zfs list -o name -H | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents
                         """
                 )!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas":
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220807-000000
@@ -139,7 +139,7 @@ final class SyncerTest: XCTestCase {
                         nas_12tb/nas/documents@20220801-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas":
+            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220805-000000
@@ -196,13 +196,13 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas":
+            case "zfs list -o name -H | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents
                         """
                 )!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas":
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220807-000000
@@ -211,7 +211,7 @@ final class SyncerTest: XCTestCase {
                         nas_12tb/nas/documents@20220801-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas":
+            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220804-000000
@@ -272,16 +272,16 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas":
+            case "zfs list -o name -H | grep nas_12tb/nas || true":
                 return .success(stdout: "nas_12tb/nas/documents")!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas":
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220806-000000
                         nas_12tb/nas/documents@20220805-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas":
+            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
                 return .success(stdout: "nas_12tb/nas/documents@20220805-000000")!
             case "zfs send -v -i nas_12tb/nas/documents@20220805-000000 nas_12tb/nas/documents@20220806-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F nas_12tb/nas/documents@20220806-000000":
                 expectSend20220806.fulfill()
@@ -316,16 +316,16 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas":
+            case "zfs list -o name -H | grep nas_12tb/nas || true":
                 return .success(stdout: "nas_12tb/nas/documents")!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas":
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220806-000000
                         nas_12tb/nas/documents@20220805-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep pool_b/backups/nas_12tb/nas":
+            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep pool_b/backups/nas_12tb/nas || true":
                 return .success(stdout: "pool_b/backups/nas_12tb/nas/documents@20220805-000000")!
             case "zfs send -v -i nas_12tb/nas/documents@20220805-000000 nas_12tb/nas/documents@20220806-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F pool_b/backups/nas_12tb/nas/documents@20220806-000000":
                 expectSend20220806.fulfill()
@@ -361,16 +361,16 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep pool_b/backups/nas_12tb/nas":
+            case "zfs list -o name -H | grep pool_b/backups/nas_12tb/nas || true":
                 return .success(stdout: "pool_b/backups/nas_12tb/nas/documents")!
-            case "zfs list -o name -H -t snapshot | grep pool_b/backups/nas_12tb/nas":
+            case "zfs list -o name -H -t snapshot | grep pool_b/backups/nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         pool_b/backups/nas_12tb/nas/documents@20220806-000000
                         pool_b/backups/nas_12tb/nas/documents@20220805-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas":
+            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
                 return .success(stdout: "nas_12tb/nas/documents@20220805-000000")!
             case "zfs send -v -i pool_b/backups/nas_12tb/nas/documents@20220805-000000 pool_b/backups/nas_12tb/nas/documents@20220806-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F nas_12tb/nas/documents@20220806-000000":
                 expectSend20220806.fulfill()
@@ -405,16 +405,16 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_pool/archive/source-pool":
+            case "zfs list -o name -H | grep nas_pool/archive/source-pool || true":
                 return .success(stdout: "nas_pool/archive/source-pool/data")!
-            case "zfs list -o name -H -t snapshot | grep nas_pool/archive/source-pool":
+            case "zfs list -o name -H -t snapshot | grep nas_pool/archive/source-pool || true":
                 return .success(
                     stdout: """
                         nas_pool/archive/source-pool/data@20220806-000000
                         nas_pool/archive/source-pool/data@20220805-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep backup_pool/source-pool":
+            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep backup_pool/source-pool || true":
                 return .success(stdout: "backup_pool/source-pool/data@20220805-000000")!
             case "zfs send -v -i nas_pool/archive/source-pool/data@20220805-000000 nas_pool/archive/source-pool/data@20220806-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F backup_pool/source-pool/data@20220806-000000":
                 expectSend20220806.fulfill()
@@ -448,9 +448,9 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas":
+            case "zfs list -o name -H | grep nas_12tb/nas || true":
                 return .success(stdout: "nas_12tb/nas/documents")!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas":
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220807-000000
@@ -459,7 +459,7 @@ final class SyncerTest: XCTestCase {
                         nas_12tb/nas/documents@20220801-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep pool_b/backups/nas_12tb/nas":
+            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep pool_b/backups/nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         pool_b/backups/nas_12tb/nas/documents@20220805-000000
@@ -498,11 +498,11 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas":
+            case "zfs list -o name -H | grep nas_12tb/nas || true":
                 return .success(stdout: "nas_12tb/nas/documents")!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas":
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
                 return .success(stdout: "nas_12tb/nas/documents@20220806-000000")!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep pool_b/backups/nas_12tb/nas":
+            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep pool_b/backups/nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         pool_b/backups/nas_12tb/nas/documents@20220806-000000
@@ -545,20 +545,20 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas":
+            case "zfs list -o name -H | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents
                         """
                 )!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas":
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220807-000000
                         nas_12tb/nas/documents@20220806-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas":
+            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220805-000000

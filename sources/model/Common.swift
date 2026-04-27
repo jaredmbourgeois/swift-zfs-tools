@@ -103,7 +103,10 @@ enum ZFS {
     static func listDatasets(grepping: String? = nil) -> String {
         var command = Self.list()
         if let grepping {
-            command += " | grep \(grepping)"
+            // `|| true` so an empty grep result (no datasets matching) is reported as zero
+            // datasets, not a failure. grep exits 1 on no-match which the shell wrapper
+            // would otherwise propagate as a hard error — meaningful for first-time runs.
+            command += " | grep \(grepping) || true"
         }
         return command
     }
@@ -111,7 +114,8 @@ enum ZFS {
     static func listSnapshots(grepping: String? = nil) -> String {
         var command = "\(Self.list()) -t snapshot"
         if let grepping {
-            command += " | grep \(grepping)"
+            // See note on listDatasets — same rationale (e.g. fresh remote with no snapshots yet).
+            command += " | grep \(grepping) || true"
         }
         return command
     }
