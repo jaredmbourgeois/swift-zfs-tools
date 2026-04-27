@@ -53,7 +53,15 @@ public struct Syncer: Sendable {
     }
 
     private func datasets() async throws -> [DatasetSnapshotOperation] {
-        async let datasetsLocalBinding: [String] = try await shell.execute(
+        // Run the three listings sequentially, not via `async let`. swift-shell's
+        // pipe-readability handlers race with process termination on fast-completing
+        // local commands when multiple processes are in flight concurrently — the
+        // process exits and the result is captured before the stdout pipe has been
+        // drained, returning empty stdout despite the pipeline producing output.
+        // Sequential execution gives each call's readability handler time to flush
+        // before the next process spawns. The 3 listings together take ~milliseconds
+        // when not racing; the wall-time tradeoff is negligible.
+        let datasetsLocal: [String] = try await shell.execute(
                 ZFS.listDatasets(grepping: config.datasetGrep),
                 dryRun: !config.execute
             )
@@ -63,7 +71,7 @@ public struct Syncer: Sendable {
                 lineSeparator: config.lineSeparator
             )
             .stdoutTyped
-        async let snapshotsLocalBinding: [String] = try await shell.execute(
+        let snapshotsLocal: [String] = try await shell.execute(
                 ZFS.listSnapshots(grepping: config.datasetGrep),
                 dryRun: !config.execute
             )
@@ -75,7 +83,7 @@ public struct Syncer: Sendable {
             .stdoutTyped
         // Remote datasets carry the path transform; grep with the transformed pattern so the
         // remote-side `zfs list ... | grep` actually matches.
-        async let snapshotsRemoteRawBinding: [String] = try await shell.execute(
+        let snapshotsRemoteRaw: [String] = try await shell.execute(
                 remote(ZFS.listSnapshots(grepping: remoteDatasetGrep)),
                 dryRun: !config.execute
             )
@@ -85,15 +93,6 @@ public struct Syncer: Sendable {
                 lineSeparator: config.lineSeparator
             )
             .stdoutTyped
-        let (
-            datasetsLocal,
-            snapshotsLocal,
-            snapshotsRemoteRaw
-        ) = try await (
-            datasetsLocalBinding,
-            snapshotsLocalBinding,
-            snapshotsRemoteRawBinding
-        )
         // Reverse-transform remote snapshot names into local form so all internal comparisons
         // run in a single namespace. Forward-transform happens at the wire boundary in sync().
         let snapshotsRemote = snapshotsRemoteRaw.map { reversePath($0) }
