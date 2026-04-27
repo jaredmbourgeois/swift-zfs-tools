@@ -51,13 +51,13 @@ final class ConsolidatorTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas/":
+            case "zfs list -o name -H | grep nas_12tb/nas/ || true":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents
                     """
                 )!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/":
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/ || true":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents@20220805-000000
@@ -119,13 +119,13 @@ final class ConsolidatorTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas/":
+            case "zfs list -o name -H | grep nas_12tb/nas/ || true":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents
                     """
                 )!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/":
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/ || true":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents@20220805-000000
@@ -180,13 +180,13 @@ final class ConsolidatorTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas/":
+            case "zfs list -o name -H | grep nas_12tb/nas/ || true":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents
                     """
                 )!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/":
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/ || true":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents@20220805-000000
@@ -236,13 +236,13 @@ final class ConsolidatorTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas/":
+            case "zfs list -o name -H | grep nas_12tb/nas/ || true":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents
                     """
                 )!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/":
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/ || true":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents@20220805-000000
@@ -306,13 +306,13 @@ final class ConsolidatorTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas/":
+            case "zfs list -o name -H | grep nas_12tb/nas/ || true":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents
                     """
                 )!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/":
+            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas/ || true":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents@20220808-000000                  

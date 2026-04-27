@@ -44,7 +44,7 @@ final class SnapshotterTest: XCTestCase {
                 _ timeout: TimeInterval?
             ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep \(SnapshotterConfigTest.defaultDataset)":
+            case "zfs list -o name -H | grep \(SnapshotterConfigTest.defaultDataset) || true":
                 return .success(
                     stdout: datasets.joined(separator: Defaults.lineSeparator)
                 )!
