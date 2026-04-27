@@ -54,7 +54,9 @@ extension SyncerConfigTest {
         sshKeyPath: String = sshKeyPath,
         sshUser: String = sshUser,
         sshIP: String = sshIP,
-        stringEncoding: String.Encoding = Defaults.stringEncoding
+        stringEncoding: String.Encoding = Defaults.stringEncoding,
+        remotePathStrip: String? = nil,
+        remotePathRoot: String? = nil
     ) -> Syncer.Config {
         .init(
             datasetGrep: datasetGrep,
@@ -65,10 +67,15 @@ extension SyncerConfigTest {
             sshKeyPath: sshKeyPath,
             sshUser: sshUser,
             sshIP: sshIP,
-            stringEncoding: stringEncoding
+            stringEncoding: stringEncoding,
+            remotePathStrip: remotePathStrip,
+            remotePathRoot: remotePathRoot
         )
     }
 
+  // Optional remotePath* fields default to nil; the synthesized Codable for Optional uses
+  // encodeIfPresent so nil values are omitted from the encoded JSON. Decode accepts both
+  // missing keys and explicit nulls.
   static let defaultConfigEncode = "{\"datasetGrep\":\"nas_12tb\\/nas\",\"dateSeparator\":\"@\",\"execute\":false,\"lineSeparator\":\"\\n\",\"sshIP\":\"sshIP\",\"sshKeyPath\":\"sshKeyPath\",\"sshPort\":\"sshPort\",\"sshUser\":\"sshUser\",\"stringEncodingRawValue\":4}"
 
   static let defaultConfigDecode = """
