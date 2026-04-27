@@ -32,8 +32,9 @@ public struct Syncer: Sendable {
         var sendCommand: String
         for dataset in datasets {
             for snapshotToDelete in dataset.snapshotsRemoteToDelete {
+                // snapshotToDelete.snapshot is stored in local form; transform to remote for destroy
                 _ = try await shell.execute(
-                    remote(ZFS.destroy(subject: snapshotToDelete.snapshot)),
+                    remote(ZFS.destroy(subject: forwardPath(snapshotToDelete.snapshot))),
                     dryRun: !config.execute
                 ).get()
             }
@@ -42,7 +43,7 @@ public struct Syncer: Sendable {
                 if let previousSnapshot = snapshotToSend.previous {
                     sendCommand += " -i \(previousSnapshot.snapshot)"
                 }
-                sendCommand += " \(snapshotToSend.this.snapshot) | \(sshLogin) zfs recv -F \(snapshotToSend.this.snapshot)"
+                sendCommand += " \(snapshotToSend.this.snapshot) | \(sshLogin) zfs recv -F \(forwardPath(snapshotToSend.this.snapshot))"
                 _ = try await shell.execute(
                     sendCommand,
                     dryRun: !config.execute
@@ -72,8 +73,10 @@ public struct Syncer: Sendable {
                 lineSeparator: config.lineSeparator
             )
             .stdoutTyped
-        async let snapshotsRemoteBinding: [String] = try await shell.execute(
-                remote(ZFS.listSnapshots(grepping: config.datasetGrep)),
+        // Remote datasets carry the path transform; grep with the transformed pattern so the
+        // remote-side `zfs list ... | grep` actually matches.
+        async let snapshotsRemoteRawBinding: [String] = try await shell.execute(
+                remote(ZFS.listSnapshots(grepping: remoteDatasetGrep)),
                 dryRun: !config.execute
             )
             .get()
@@ -85,12 +88,15 @@ public struct Syncer: Sendable {
         let (
             datasetsLocal,
             snapshotsLocal,
-            snapshotsRemote
+            snapshotsRemoteRaw
         ) = try await (
             datasetsLocalBinding,
             snapshotsLocalBinding,
-            snapshotsRemoteBinding
+            snapshotsRemoteRawBinding
         )
+        // Reverse-transform remote snapshot names into local form so all internal comparisons
+        // run in a single namespace. Forward-transform happens at the wire boundary in sync().
+        let snapshotsRemote = snapshotsRemoteRaw.map { reversePath($0) }
         return try await withThrowingTaskGroup(of: DatasetSnapshotOperation.self) { [dateFormatter] taskGroup in
             for dataset in datasetsLocal {
                 taskGroup.addTask {
@@ -150,6 +156,41 @@ public struct Syncer: Sendable {
     private func remote(_ command: String) -> String {
         "\(sshLogin) \(command)"
     }
+
+    /// Forward-transform a local-form path/snapshot to its remote-form equivalent.
+    ///
+    /// Order of operations: strip `remotePathStrip` from the front (if present), then prepend
+    /// `remotePathRoot` (if set). When both are nil the input is returned unchanged, preserving
+    /// 1.2.0 behavior.
+    private func forwardPath(_ localPath: String) -> String {
+        Self.applyPathTransform(localPath, strip: config.remotePathStrip, add: config.remotePathRoot)
+    }
+
+    /// Reverse-transform a remote-form path/snapshot back to its local-form equivalent.
+    ///
+    /// The inverse of `forwardPath`: strip `remotePathRoot` then prepend `remotePathStrip`.
+    private func reversePath(_ remotePath: String) -> String {
+        Self.applyPathTransform(remotePath, strip: config.remotePathRoot, add: config.remotePathStrip)
+    }
+
+    /// Remote-side grep pattern for `zfs list`, derived from `datasetGrep` via `forwardPath`.
+    /// Returns `nil` when no grep is configured.
+    private var remoteDatasetGrep: String? {
+        guard let grep = config.datasetGrep else { return nil }
+        return forwardPath(grep)
+    }
+
+    private static func applyPathTransform(_ input: String, strip: String?, add: String?) -> String {
+        var path = input
+        if let strip, !strip.isEmpty, path.hasPrefix(strip) {
+            path = String(path.dropFirst(strip.count))
+            if path.hasPrefix("/") { path = String(path.dropFirst()) }
+        }
+        if let add, !add.isEmpty {
+            path = "\(add)/\(path)"
+        }
+        return path
+    }
 }
 
 extension Syncer {
@@ -163,6 +204,12 @@ extension Syncer {
         let sshUser: String
         let sshIP: String
         let stringEncodingRawValue: UInt
+        /// Strip this prefix from local dataset paths before computing the remote path.
+        /// Combine with `remotePathRoot` to redirect snapshots to a different location on the
+        /// destination. Both nil = behavior identical to 1.2.0 (recv path matches send path).
+        let remotePathStrip: String?
+        /// Prepend this root to the (possibly stripped) dataset path on the destination.
+        let remotePathRoot: String?
         var stringEncoding: String.Encoding { .init(rawValue: stringEncodingRawValue) }
 
         public init(
@@ -174,7 +221,9 @@ extension Syncer {
             sshKeyPath: String,
             sshUser: String,
             sshIP: String,
-            stringEncoding: String.Encoding
+            stringEncoding: String.Encoding,
+            remotePathStrip: String? = nil,
+            remotePathRoot: String? = nil
         ) {
             self.datasetGrep = datasetGrep
             self.dateSeparator = dateSeparator
@@ -185,6 +234,8 @@ extension Syncer {
             self.sshUser = sshUser
             self.sshIP = sshIP
             self.stringEncodingRawValue = stringEncoding.rawValue
+            self.remotePathStrip = remotePathStrip
+            self.remotePathRoot = remotePathRoot
         }
 
         public init(
@@ -199,6 +250,8 @@ extension Syncer {
             sshUser = arguments.sshUser
             sshIP = arguments.sshIP
             stringEncodingRawValue = arguments.common.stringEncodingRawValue ?? Defaults.stringEncoding.rawValue
+            remotePathStrip = arguments.remotePathStrip
+            remotePathRoot = arguments.remotePathRoot
         }
     }
 

@@ -197,6 +197,14 @@ extension Arguments {
         public var sshIP: String
         public static let sshIPHelp = "SSH IP for remote."
 
+        @Option(help: "\(Self.remotePathStripHelp)")
+        public var remotePathStrip: String?
+        public static let remotePathStripHelp = "Strip this prefix from the local dataset path before computing the remote path. Use with --remote-path-root to redirect snapshots to a different location on the destination. Defaults to no strip."
+
+        @Option(help: "\(Self.remotePathRootHelp)")
+        public var remotePathRoot: String?
+        public static let remotePathRootHelp = "Prepend this root to the (possibly stripped) dataset path on the destination. E.g. --remote-path-root pool_b/backups makes 'pool_a/data' arrive as 'pool_b/backups/pool_a/data' on the remote. Defaults to no prepend (recv path matches send path)."
+
         public init() {}
     }
 

@@ -109,7 +109,7 @@ struct Command: AsyncParsableCommand {
           # For incremental backups to a remote system
           zfs-tools sync --dataset-grep tank/critical --ssh-user backup --ssh-ip 192.168.1.100 --ssh-port 22 --ssh-key-path ~/.ssh/backup_key --execute
         """,
-        version: "1.2.0",
+        version: "1.2.1",
         shouldDisplay: true,
         subcommands: [
             ExecuteActions.self,
