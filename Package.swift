@@ -60,7 +60,7 @@ enum Dependency: String {
     var packageVersion: String {
         switch self {
         case .argumentParser: "1.5.0"
-        case .shell: "1.4.0"
+        case .shell: "1.4.1"
         }
     }
 

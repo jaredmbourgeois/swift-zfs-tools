@@ -30,6 +30,8 @@ public struct Consolidator: Sendable {
     }
 
     public func consolidate() async throws {
+        // Two parallel local listings — read-only at the ZFS layer, parallel-safe.
+        // Requires swift-shell ≥1.4.1 (pipe-drain race fixed there).
         async let datasetsLocalBinding: [String] = try await shell.execute(
             ZFS.listDatasets(grepping: config.datasetGrep),
             dryRun: !config.execute
