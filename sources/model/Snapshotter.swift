@@ -54,6 +54,12 @@ public struct Snapshotter: Sendable {
             lineSeparator: config.lineSeparator
         )
         .stdoutTyped
+        // Per-dataset `zfs snapshot` calls in parallel. Each is independent at the
+        // ZFS layer — distinct datasets share the pool's TXG batch but the kernel
+        // serializes metadata commits transparently, so parallelism is safe and
+        // saves wall time when N is large. Requires swift-shell ≥1.4.1 — pre-1.4.1
+        // had a pipe-drain race that lost stdout (empty-output on macOS / hard
+        // libdispatch segfault on Swift 6.3.1 / Linux) under parallel use.
         try await withThrowingDiscardingTaskGroup { taskGroup in
             for dataset in datasets {
                 taskGroup.addTask {

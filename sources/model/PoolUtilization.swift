@@ -43,6 +43,8 @@ public struct PoolUtilization: Sendable, Equatable {
         stringEncoding: String.Encoding,
         lineSeparator: String
     ) async throws -> PoolUtilization {
+        // Two parallel local listings — read-only at the ZFS layer, parallel-safe.
+        // Requires swift-shell ≥1.4.1 (pipe-drain race fixed there).
         async let capacityBinding: String = try await shell.execute(
             ZFS.poolCapacity(pool: pool),
             dryRun: dryRun
