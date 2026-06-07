@@ -14,6 +14,7 @@ let package = Package(
         .macOS(.v14),
     ],
     products: [
+        Product.builder.product,
         Product.command.product,
         Product.model.product,
     ],
@@ -22,6 +23,7 @@ let package = Package(
         Dependency.shell.packageDependency,
     ],
     targets: [
+        Product.builder.target,
         Product.command.target,
         Product.model.target,
         Product.tests.target,
@@ -73,12 +75,14 @@ enum Dependency: String {
 }
 
 enum Product: String {
+    case builder
     case command
     case model
     case tests
 
     var name: String {
         switch self {
+        case .builder: "ZFSToolsBuilder"
         case .command: "ZFSTools"
         case .model: "ZFSToolsModel"
         case .tests: "ZFSToolsTests"
@@ -94,6 +98,7 @@ enum Product: String {
 
     var product: PackageDescription.Product {
         switch self {
+        case .builder: .executable(name: name, targets: [name])
         case .command: .executable(name: name, targets: [name])
         case .model: .library(name: name, targets: [name])
         case .tests: .library(name: name, targets: [name])
@@ -104,7 +109,7 @@ enum Product: String {
 
     var target: PackageDescription.Target {
         switch self {
-        case .command:
+        case .builder, .command:
             .executableTarget(
                 name: name,
                 dependencies: [

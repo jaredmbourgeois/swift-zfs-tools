@@ -16,21 +16,16 @@ struct Command: AsyncParsableCommand {
         commandName: "zfs-tools",
         abstract: """
         ZFS snapshot management for the command line.
-        
-        This toolkit helps you create, manage, and replicate ZFS snapshots with simple
-        commands that can be run directly or through configuration files. Perfect for
-        automating backups and ensuring your data is protected with minimal effort.
-        
-        Core features:
-          • Create timestamped snapshots with recursive dataset support
-          • Smart retention policies that keep the right snapshots and clean up the rest
-          • Secure snapshot replication to remote systems
-          • Chain commands together for complete backup workflows
-        
-        I hope you enjoy using zfs-tools! If you find it helpful and would like to show your support, coffee donations are greatly appreciated!
-        BTC: 3ACMiYCiknTp4VoSE9Zxc2JnaxmDAMGBqH
-        ETH: 0xD97F48B5Ab68285c58BD1D11dE87a166A7C4D0b0
-        SOL: LW3j5Zv54a8qD7dzZ5KdpfE6UssFAGj48uM1DhJCeSN
+
+        Create, consolidate, replicate, and automate ZFS snapshots, run directly or from JSON
+        config files. Dry-run by default: commands are printed until you pass --execute true.
+
+          • snapshot          timestamped snapshots, optionally recursive
+          • consolidate       apply a Grandfather-Father-Son retention schedule
+          • sync              replicate snapshots to a remote host over SSH
+          • execute-actions   chain snapshot, consolidate, and sync from one file
+
+        Donations are welcome — BTC 3ACMiYCiknTp4VoSE9Zxc2JnaxmDAMGBqH · ETH 0xD97F48B5Ab68285c58BD1D11dE87a166A7C4D0b0 · SOL LW3j5Zv54a8qD7dzZ5KdpfE6UssFAGj48uM1DhJCeSN
         """,
         usage: """
         
@@ -80,7 +75,7 @@ struct Command: AsyncParsableCommand {
         TYPICAL WORKFLOWS
           Simple backup routine:
           1. snapshot - Create point-in-time backups of important datasets
-          2. consolidate - Intelligently manage retention to save space
+          2. consolidate - Apply the retention schedule to save space
           3. sync - Copy snapshots to a second system for redundancy
           
           For automation, create config files and add execute-actions to cron:
@@ -109,7 +104,7 @@ struct Command: AsyncParsableCommand {
           # For incremental backups to a remote system
           zfs-tools sync --dataset-grep tank/critical --ssh-user backup --ssh-ip 192.168.1.100 --ssh-port 22 --ssh-key-path ~/.ssh/backup_key --execute
         """,
-        version: "1.2.4",
+        version: "2.0.0",
         shouldDisplay: true,
         subcommands: [
             ExecuteActions.self,

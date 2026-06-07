@@ -11,14 +11,7 @@ import Foundation
 /// Namespace for the CLI's parsed argument groups — one `ParsableArguments` struct per command.
 /// Each `Config` type builds from the matching group here. Per-flag help lives in the `@Option`
 /// definitions below.
-public enum Arguments {
-    case consolidate(Consolidate)
-    case consolidateConfigure(ConsolidateConfigure)
-    case snapshot(Snapshot)
-    case snapshotConfigure(SnapshotConfigure)
-    case sync(Sync)
-    case syncConfigure(SyncConfigure)
-}
+public enum Arguments {}
 
 extension Arguments {
     /// Options shared by every command: dry-run, date format/separator, shell, output encoding.
@@ -241,6 +234,46 @@ extension Arguments {
         @Option(help: "\(Self.configPathHelp)")
         public var configPath: String
         public static let configPathHelp = "Full path, including name, of a Syncer.Config JSON; .json will be appended if not provided. eg /path/to/snapshot-config/nas_sync"
+
+        public init() {}
+    }
+}
+
+extension Arguments {
+    /// Arguments for the `zfs-tools-build` binary builder — builds `zfs-tools` and drops it into
+    /// `bin/<platform>/`, locally or on a remote host over SSH.
+    public struct Build: ParsableArguments, Sendable {
+        @Option(help: "\(Self.remoteHelp)")
+        public var remote: String?
+        public static let remoteHelp = "SSH destination (host or ~/.ssh/config alias) to build on. Builds locally when omitted."
+
+        @Option(help: "\(Self.sourceDirHelp)")
+        public var sourceDir: String?
+        public static let sourceDirHelp = "Source directory to build. Defaults to the current directory."
+
+        @Option(help: "\(Self.tempDirHelp)")
+        public var tempDir: String?
+        public static let tempDirHelp = "Remote directory to rsync the source into and build in, relative to the remote home directory (or absolute). Defaults to zfs-tools-build."
+
+        @Option(help: "\(Self.destinationHelp)")
+        public var destination: String?
+        public static let destinationHelp = "Output path for the built binary. Defaults to <source>/bin/<platform>/zfs-tools."
+
+        @Option(help: "\(Self.platformHelp)")
+        public var platform: String?
+        public static let platformHelp = "Override the bin/<platform> directory (e.g. linux-x86_64). Derived from uname at the build site when omitted."
+
+        @Option(help: "\(Self.swiftHelp)")
+        public var swift: String?
+        public static let swiftHelp = "Path to the swift binary on the build site. Defaults to 'swift' (PATH); a remote may need an absolute path."
+
+        @Option(help: "\(Self.configurationHelp)")
+        public var configuration: String?
+        public static let configurationHelp = "Build configuration: release or debug. Defaults to release."
+
+        @Flag(help: "\(Self.keepTempHelp)")
+        public var keepTemp: Bool = false
+        public static let keepTempHelp = "Keep the remote build directory instead of removing it after the build."
 
         public init() {}
     }

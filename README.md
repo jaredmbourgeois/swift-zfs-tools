@@ -1,13 +1,6 @@
 # swift-zfs-tools
 
-A Swift 6 CLI for the full ZFS snapshot lifecycle — **create · consolidate · replicate · automate**. Dry-run by default, Grandfather-Father-Son retention, pool-aware pruning, incremental remote sync, and policy-as-JSON for cron. macOS 14+ and Linux.
-
-- **Safe by default** — every command is printed, not executed, until you add `--execute true`.
-- **GFS retention** — keep 7 daily, 3 weekly, 11 monthly, then yearly forever; ~24 snapshots cover 3 years instead of ~1000.
-- **Pool-aware** — skip snapshots, or aggressively prune, when capacity or free space crosses a threshold.
-- **Incremental replication** — `zfs send | ssh zfs recv` with incremental deltas, remote-path remapping, and stale-snapshot cleanup.
-- **Policy as code** — save any command as JSON, commit it, and chain snapshot → consolidate → sync from one actions file in cron.
-- **Hardened** — shell-safe single-quoting, atomic config writes, fail-loud pool checks, complete Swift 6 strict concurrency.
+ZFS snapshot management for the command line — create, consolidate, replicate, and automate snapshots. Dry-run by default: the commands it would run are printed until you pass `--execute true`. macOS 14+ and Linux.
 
 Built on [swift-argument-parser](https://github.com/apple/swift-argument-parser) and [swift-shell](https://github.com/jaredmbourgeois/swift-shell). The core logic ships as an importable library, `ZFSToolsModel`.
 
@@ -33,13 +26,24 @@ swift build -c release
 
 Compile-time defaults (retention schedule, date format, shell) live in `sources/model/Defaults.swift`.
 
+### Regenerate the prebuilt binaries
+
+`zfs-tools-build` rebuilds `bin/<platform>/zfs-tools`, deriving the platform from `uname` at the build site (override with `--platform`). It builds locally when `--remote` is omitted, otherwise rsyncs the source to the host, builds there, and copies the artifact back (override the output with `--destination`).
+
+```bash
+swift run ZFSToolsBuilder                          # rebuild this host's binary in place
+swift run ZFSToolsBuilder --remote user@buildhost  # build on a remote host over SSH, copy back
+```
+
+`--remote` takes any SSH destination or `~/.ssh/config` alias. Add `--swift /path/to/swift` if Swift isn't on the remote's `PATH`.
+
 ## Quick start
 
 ```bash
 # 1. Snapshot — dry-run first (prints commands, runs nothing)
 zfs-tools snapshot --dataset-grep tank/data --recursive true
 
-# 2. Looks right? Run it
+# 2. Run it for real
 zfs-tools snapshot --dataset-grep tank/data --recursive true --execute true
 
 # 3. Prune to the GFS schedule
@@ -238,4 +242,4 @@ A consolidate config wraps the [schedule](#retention) shown above plus `datasetG
 
 Apache License v2.0 with Runtime Library Exception.
 
-Enjoying zfs-tools? Coffee donations are appreciated — BTC `3ACMiYCiknTp4VoSE9Zxc2JnaxmDAMGBqH` · ETH `0xD97F48B5Ab68285c58BD1D11dE87a166A7C4D0b0` · SOL `LW3j5Zv54a8qD7dzZ5KdpfE6UssFAGj48uM1DhJCeSN`
+Donations are welcome — BTC `3ACMiYCiknTp4VoSE9Zxc2JnaxmDAMGBqH` · ETH `0xD97F48B5Ab68285c58BD1D11dE87a166A7C4D0b0` · SOL `LW3j5Zv54a8qD7dzZ5KdpfE6UssFAGj48uM1DhJCeSN`

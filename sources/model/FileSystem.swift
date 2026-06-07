@@ -12,8 +12,8 @@ import Foundation
 /// uses `.live` (backed by `FileManager` / `Data`); tests inject an in-memory implementation
 /// so config read/write paths are unit-testable without touching the disk.
 public struct FileSystem: Sendable {
-    public var contents: @Sendable (_ path: String) -> Data?
-    public var write: @Sendable (_ data: Data, _ path: String) throws -> Void
+    public let contents: @Sendable (_ path: String) -> Data?
+    public let write: @Sendable (_ data: Data, _ path: String) throws -> Void
 
     public init(
         contents: @escaping @Sendable (_ path: String) -> Data?,

@@ -44,13 +44,28 @@ extension ShellAtPath {
     public init(
         arguments: Arguments.Common
     ) {
-        let lineSeparator = arguments.lineSeparator ?? Defaults.lineSeparator
-        let stringEncoding = String.Encoding(rawValue: arguments.stringEncodingRawValue ?? Defaults.stringEncoding.rawValue)
+        self = .loggingToStdout(
+            shellPath: arguments.shellPath ?? Defaults.shellPath,
+            lineSeparator: arguments.lineSeparator ?? Defaults.lineSeparator,
+            stringEncoding: .init(rawValue: arguments.stringEncodingRawValue ?? Defaults.stringEncoding.rawValue)
+        )
+    }
+
+    /// A `ShellAtPath` whose observer prints each command, its exit status, and decoded
+    /// stdout/stderr (prefixed `<label>:`). Shared by the `zfs-tools` CLI and the `zfs-tools-build`
+    /// builder. Take plain values — never read `@Option`s off a hand-constructed `ParsableArguments`,
+    /// which traps.
+    public static func loggingToStdout(
+        label: String = "zfs-tools command",
+        shellPath: String = Defaults.shellPath,
+        lineSeparator: String = Defaults.lineSeparator,
+        stringEncoding: String.Encoding = Defaults.stringEncoding
+    ) -> ShellAtPath {
         @Sendable func prefix(_ string: String) -> String {
-            "zfs-tools command: \(string)"
+            "\(label): \(string)"
         }
-        self = .atPath(
-            arguments.shellPath ?? Defaults.shellPath,
+        return .atPath(
+            shellPath,
             shellObserver: .init(
                 onResult: { command, result in
                     print(prefix(command))
