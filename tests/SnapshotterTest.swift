@@ -27,9 +27,9 @@ final class SnapshotterTest: XCTestCase {
             "nas_12tb/nas/documents",
             "nas_12tb/nas/media",
         ]
-        let snapshotNasCommand = "zfs snapshot -r \(datasets[0])\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))"
-        let snapshotNasDocumentsCommand = "zfs snapshot -r \(datasets[1])\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))"
-        let snapshotNasMediaCommand = "zfs snapshot -r \(datasets[2])\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))"
+        let snapshotNasCommand = "zfs snapshot -r '\(datasets[0])\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))'"
+        let snapshotNasDocumentsCommand = "zfs snapshot -r '\(datasets[1])\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))'"
+        let snapshotNasMediaCommand = "zfs snapshot -r '\(datasets[2])\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))'"
         let expectSnapshotNas = expectation(description: "expect snapshot \(datasets[0])")
         let expectSnapshotNasDocuments = expectation(description: "expect snapshot \(datasets[1])")
         let expectSnapshotNasMedia = expectation(description: "expect snapshot \(datasets[2])")
@@ -44,7 +44,7 @@ final class SnapshotterTest: XCTestCase {
                 _ timeout: TimeInterval?
             ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep \(SnapshotterConfigTest.defaultDataset) || true":
+            case "zfs list -o name -H | grep '\(SnapshotterConfigTest.defaultDataset)' || true":
                 return .success(
                     stdout: datasets.joined(separator: Defaults.lineSeparator)
                 )!

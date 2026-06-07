@@ -37,14 +37,14 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas || true":
+            case "zfs list -o name -H | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents
                         nas_12tb/nas/documents-alt
                         """
                 )!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
+            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220805-000000
@@ -54,7 +54,7 @@ final class SyncerTest: XCTestCase {
                         nas_12tb/nas/documents-alt@20220801-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220804-000000
@@ -65,19 +65,19 @@ final class SyncerTest: XCTestCase {
                         nas_12tb/nas/documents-alt@20220801-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs destroy nas_12tb/nas/documents@20220804-000000":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents@20220804-000000'":
                 expectDelete20220804.fulfill()
                 return .success()
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs destroy nas_12tb/nas/documents@20220802-000000":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents@20220802-000000'":
                 expectDelete20220802.fulfill()
                 return .success()
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs destroy nas_12tb/nas/documents-alt@20220803-000000":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents-alt@20220803-000000'":
                 expectDeleteAlt20220803.fulfill()
                 return .success()
-            case "zfs send -v -i nas_12tb/nas/documents@20220803-000000 nas_12tb/nas/documents@20220805-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F nas_12tb/nas/documents@20220805-000000":
+            case "zfs send -v -i 'nas_12tb/nas/documents@20220803-000000' 'nas_12tb/nas/documents@20220805-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220805-000000'":
                 expectSend20220805.fulfill()
                 return .success()
-            case "zfs send -v -i nas_12tb/nas/documents-alt@20220801-000000 nas_12tb/nas/documents-alt@20220805-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F nas_12tb/nas/documents-alt@20220805-000000":
+            case "zfs send -v -i 'nas_12tb/nas/documents-alt@20220801-000000' 'nas_12tb/nas/documents-alt@20220805-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents-alt@20220805-000000'":
                 expectSendAlt20220805.fulfill()
                 return .success()
             default:
@@ -123,13 +123,13 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas || true":
+            case "zfs list -o name -H | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents
                         """
                 )!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
+            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220807-000000
@@ -139,17 +139,17 @@ final class SyncerTest: XCTestCase {
                         nas_12tb/nas/documents@20220801-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220805-000000
                         nas_12tb/nas/documents@20220801-000000
                         """
                 )!
-            case "zfs send -v -i nas_12tb/nas/documents@20220805-000000 nas_12tb/nas/documents@20220806-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F nas_12tb/nas/documents@20220806-000000":
+            case "zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
                 expectSend20220806.fulfill()
                 return .success()
-            case "zfs send -v -i nas_12tb/nas/documents@20220806-000000 nas_12tb/nas/documents@20220807-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F nas_12tb/nas/documents@20220807-000000":
+            case "zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220807-000000'":
                 expectSend20220807.fulfill()
                 return .success()
             default:
@@ -196,13 +196,13 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas || true":
+            case "zfs list -o name -H | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents
                         """
                 )!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
+            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220807-000000
@@ -211,7 +211,7 @@ final class SyncerTest: XCTestCase {
                         nas_12tb/nas/documents@20220801-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220804-000000
@@ -220,16 +220,16 @@ final class SyncerTest: XCTestCase {
                         nas_12tb/nas/documents@20220801-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs destroy nas_12tb/nas/documents@20220804-000000":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents@20220804-000000'":
                 expectDelete20220804.fulfill()
                 return .success()
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs destroy nas_12tb/nas/documents@20220802-000000":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents@20220802-000000'":
                 expectDelete20220802.fulfill()
                 return .success()
-            case "zfs send -v -i nas_12tb/nas/documents@20220803-000000 nas_12tb/nas/documents@20220806-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F nas_12tb/nas/documents@20220806-000000":
+            case "zfs send -v -i 'nas_12tb/nas/documents@20220803-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
                 expectSend20220806.fulfill()
                 return .success()
-            case "zfs send -v -i nas_12tb/nas/documents@20220806-000000 nas_12tb/nas/documents@20220807-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F nas_12tb/nas/documents@20220807-000000":
+            case "zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220807-000000'":
                 expectSend20220807.fulfill()
                 return .success()
             default:
@@ -272,18 +272,18 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas || true":
+            case "zfs list -o name -H | grep 'nas_12tb/nas' || true":
                 return .success(stdout: "nas_12tb/nas/documents")!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
+            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220806-000000
                         nas_12tb/nas/documents@20220805-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(stdout: "nas_12tb/nas/documents@20220805-000000")!
-            case "zfs send -v -i nas_12tb/nas/documents@20220805-000000 nas_12tb/nas/documents@20220806-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F nas_12tb/nas/documents@20220806-000000":
+            case "zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
                 expectSend20220806.fulfill()
                 return .success()
             default:
@@ -316,18 +316,18 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas || true":
+            case "zfs list -o name -H | grep 'nas_12tb/nas' || true":
                 return .success(stdout: "nas_12tb/nas/documents")!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
+            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220806-000000
                         nas_12tb/nas/documents@20220805-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep pool_b/backups/nas_12tb/nas || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'pool_b/backups/nas_12tb/nas' || true":
                 return .success(stdout: "pool_b/backups/nas_12tb/nas/documents@20220805-000000")!
-            case "zfs send -v -i nas_12tb/nas/documents@20220805-000000 nas_12tb/nas/documents@20220806-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F pool_b/backups/nas_12tb/nas/documents@20220806-000000":
+            case "zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'pool_b/backups/nas_12tb/nas/documents@20220806-000000'":
                 expectSend20220806.fulfill()
                 return .success()
             default:
@@ -361,18 +361,18 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep pool_b/backups/nas_12tb/nas || true":
+            case "zfs list -o name -H | grep 'pool_b/backups/nas_12tb/nas' || true":
                 return .success(stdout: "pool_b/backups/nas_12tb/nas/documents")!
-            case "zfs list -o name -H -t snapshot | grep pool_b/backups/nas_12tb/nas || true":
+            case "zfs list -o name -H -t snapshot | grep 'pool_b/backups/nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         pool_b/backups/nas_12tb/nas/documents@20220806-000000
                         pool_b/backups/nas_12tb/nas/documents@20220805-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(stdout: "nas_12tb/nas/documents@20220805-000000")!
-            case "zfs send -v -i pool_b/backups/nas_12tb/nas/documents@20220805-000000 pool_b/backups/nas_12tb/nas/documents@20220806-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F nas_12tb/nas/documents@20220806-000000":
+            case "zfs send -v -i 'pool_b/backups/nas_12tb/nas/documents@20220805-000000' 'pool_b/backups/nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
                 expectSend20220806.fulfill()
                 return .success()
             default:
@@ -405,18 +405,18 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_pool/archive/source-pool || true":
+            case "zfs list -o name -H | grep 'nas_pool/archive/source-pool' || true":
                 return .success(stdout: "nas_pool/archive/source-pool/data")!
-            case "zfs list -o name -H -t snapshot | grep nas_pool/archive/source-pool || true":
+            case "zfs list -o name -H -t snapshot | grep 'nas_pool/archive/source-pool' || true":
                 return .success(
                     stdout: """
                         nas_pool/archive/source-pool/data@20220806-000000
                         nas_pool/archive/source-pool/data@20220805-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep backup_pool/source-pool || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'backup_pool/source-pool' || true":
                 return .success(stdout: "backup_pool/source-pool/data@20220805-000000")!
-            case "zfs send -v -i nas_pool/archive/source-pool/data@20220805-000000 nas_pool/archive/source-pool/data@20220806-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F backup_pool/source-pool/data@20220806-000000":
+            case "zfs send -v -i 'nas_pool/archive/source-pool/data@20220805-000000' 'nas_pool/archive/source-pool/data@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'backup_pool/source-pool/data@20220806-000000'":
                 expectSend20220806.fulfill()
                 return .success()
             default:
@@ -448,9 +448,9 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas || true":
+            case "zfs list -o name -H | grep 'nas_12tb/nas' || true":
                 return .success(stdout: "nas_12tb/nas/documents")!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
+            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220807-000000
@@ -459,14 +459,14 @@ final class SyncerTest: XCTestCase {
                         nas_12tb/nas/documents@20220801-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep pool_b/backups/nas_12tb/nas || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'pool_b/backups/nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         pool_b/backups/nas_12tb/nas/documents@20220805-000000
                         pool_b/backups/nas_12tb/nas/documents@20220803-000000
                         """
                 )!
-            case "zfs send -v -i nas_12tb/nas/documents@20220805-000000 nas_12tb/nas/documents@20220807-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F pool_b/backups/nas_12tb/nas/documents@20220807-000000":
+            case "zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'pool_b/backups/nas_12tb/nas/documents@20220807-000000'":
                 expectSend20220807.fulfill()
                 return .success()
             default:
@@ -498,18 +498,18 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas || true":
+            case "zfs list -o name -H | grep 'nas_12tb/nas' || true":
                 return .success(stdout: "nas_12tb/nas/documents")!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
+            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(stdout: "nas_12tb/nas/documents@20220806-000000")!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep pool_b/backups/nas_12tb/nas || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'pool_b/backups/nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         pool_b/backups/nas_12tb/nas/documents@20220806-000000
                         pool_b/backups/nas_12tb/nas/documents@20220804-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs destroy pool_b/backups/nas_12tb/nas/documents@20220804-000000":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'pool_b/backups/nas_12tb/nas/documents@20220804-000000'":
                 expectDelete20220804.fulfill()
                 return .success()
             default:
@@ -545,36 +545,36 @@ final class SyncerTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep nas_12tb/nas || true":
+            case "zfs list -o name -H | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents
                         """
                 )!
-            case "zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
+            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220807-000000
                         nas_12tb/nas/documents@20220806-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs list -o name -H -t snapshot | grep nas_12tb/nas || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(
                     stdout: """
                         nas_12tb/nas/documents@20220805-000000
                         nas_12tb/nas/documents@20220801-000000
                         """
                 )!
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs destroy nas_12tb/nas/documents@20220801-000000":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents@20220801-000000'":
                 expectDelete20220801.fulfill()
                 return .success()
-            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs destroy nas_12tb/nas/documents@20220805-000000":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents@20220805-000000'":
                 expectDelete20220805.fulfill()
                 return .success()
-            case "zfs send -v nas_12tb/nas/documents@20220806-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F nas_12tb/nas/documents@20220806-000000":
+            case "zfs send -v 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
                 expectSend20220806.fulfill()
                 return .success()
-            case "zfs send -v -i nas_12tb/nas/documents@20220806-000000 nas_12tb/nas/documents@20220807-000000 | ssh -p sshPort -i sshKeyPath sshUser@sshIP zfs recv -F nas_12tb/nas/documents@20220807-000000":
+            case "zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220807-000000'":
                 expectSend20220807.fulfill()
                 return .success()
             default:
@@ -598,5 +598,45 @@ final class SyncerTest: XCTestCase {
             timeout: 1,
             enforceOrder: false
         )
+    }
+
+    // MARK: - Quoting at the Syncer boundary
+
+    /// Hardening guard: interpolated values are single-quoted into emitted commands. A sshKeyPath
+    /// containing a space must appear as `-i '/my keys/id_rsa'`, not split into two arguments.
+    func testSyncQuotesSSHKeyPathWithSpace() async throws {
+        let config = SyncerConfigTest.syncConfig(execute: true, sshKeyPath: "/my keys/id_rsa")
+        let expectQuotedSend = expectation(description: "send command quotes the spaced ssh key path")
+        let shell = ShellAtPath { @Sendable (
+            _ command: ShellCommand,
+            _ dryRun: Bool,
+            _ estimatedOutputSize: Int?,
+            _ estimatedErrorSize: Int?,
+            _ statusesForResult: ShellTermination.StatusesForResult,
+            _ stream: ShellStream?,
+            _ timeout: TimeInterval?
+        ) async -> ShellResult in
+            if command.contains("zfs send") {
+                XCTAssertTrue(command.contains("-i '/my keys/id_rsa'"), "send must quote spaced ssh key path: \(command)")
+                expectQuotedSend.fulfill()
+                return .success()
+            } else if command.contains("ssh ") && command.contains("-t snapshot") {
+                return .success(stdout: "nas_12tb/nas/documents@20220805-000000")!
+            } else if command.contains("-t snapshot") {
+                return .success(
+                    stdout: """
+                        nas_12tb/nas/documents@20220806-000000
+                        nas_12tb/nas/documents@20220805-000000
+                        """
+                )!
+            } else if command.contains("zfs list -o name -H") {
+                return .success(stdout: "nas_12tb/nas/documents")!
+            }
+            XCTFail("unexpected command: \(command)")
+            return .success()
+        }
+        let syncer = Syncer(config: config, dateFormatter: dateFormatter, shell: shell)
+        try await syncer.sync()
+        await fulfillment(of: [expectQuotedSend], timeout: 1, enforceOrder: false)
     }
 }

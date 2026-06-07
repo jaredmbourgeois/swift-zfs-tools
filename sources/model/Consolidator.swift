@@ -8,6 +8,10 @@
 import Foundation
 import Shell
 
+/// Prunes snapshots to a Grandfather-Father-Son schedule: within each period it keeps the snapshot
+/// closest to each ideal evenly-spaced date and destroys the rest, per dataset. Snapshots newer than
+/// the schedule's upper bound, and any in `config.snapshotsNotConsolidated`, are always kept. With a
+/// pool threshold set, it follows up with an aggressive oldest-first prune until utilization drops.
 public struct Consolidator: Sendable {
     private let calendar: Calendar
     private let config: Config
@@ -15,6 +19,8 @@ public struct Consolidator: Sendable {
     private let dateFormatter: DateFormatter
     private let shell: ShellAtPath
 
+    /// `date`/`dateFormatter` resolve the schedule window and parse snapshot timestamps; `calendar`
+    /// does the period math; `shell` runs the commands (inject a mock to test).
     public init(
         calendar: Calendar,
         config: Config,
@@ -29,29 +35,23 @@ public struct Consolidator: Sendable {
         self.shell = shell
     }
 
+    /// Apply the retention schedule (`zfs destroy` for snapshots outside the windows), then, if a
+    /// pool threshold is set and still exceeded, aggressively prune oldest-first.
     public func consolidate() async throws {
         // Two parallel local listings — read-only at the ZFS layer, parallel-safe.
-        // Requires swift-shell ≥1.4.1 (pipe-drain race fixed there).
-        async let datasetsLocalBinding: [String] = try await shell.execute(
+        // Safe under swift-shell 2.0.0 (parallel pipe-drain race fixed in 1.4.1).
+        async let datasetsLocalBinding: [String] = try await shell.lines(
             ZFS.listDatasets(grepping: config.datasetGrep),
-            dryRun: !config.execute
-        )
-        .get()
-        .decodeStringLines(
+            dryRun: !config.execute,
             encoding: config.stringEncoding,
             lineSeparator: config.lineSeparator
         )
-        .stdoutTyped
-        async let snapshotsLocalBinding: [String] = try await shell.execute(
+        async let snapshotsLocalBinding: [String] = try await shell.lines(
             ZFS.listSnapshots(grepping: config.datasetGrep),
-            dryRun: !config.execute
-        )
-        .get()
-        .decodeStringLines(
+            dryRun: !config.execute,
             encoding: config.stringEncoding,
             lineSeparator: config.lineSeparator
         )
-        .stdoutTyped
         let (
             datasetsLocal,
             snapshotsLocal
@@ -295,15 +295,24 @@ public struct Consolidator: Sendable {
 }
 
 extension Consolidator {
+    /// A consolidation run as a `Codable` value — the `consolidate-configure` / `consolidate-configured`
+    /// JSON schema. Build it from CLI `Arguments.Consolidate` or decode it from a saved config file.
     public struct Config: Codable, Sendable, Equatable {
+        /// Only consolidate datasets whose `zfs list` name matches this `grep` pattern; `nil` = all.
         public let datasetGrep: String?
         public let dateSeparator: String
+        /// When `false` (the default), `zfs destroy` commands are printed but not run.
         public let execute: Bool
         public let lineSeparator: String
+        /// After the schedule runs, aggressively prune if capacity still exceeds this percent; `nil` disables.
         public let maxPoolUtilizationPercent: Float?
+        /// After the schedule runs, aggressively prune if free space is still below this many bytes; `nil` disables.
         public let minFreeBytes: Int64?
+        /// The retention schedule — the periods and counts that decide which snapshots survive.
         public let schedule: SnapshotConsolidationSchedule
+        /// Snapshot names that are never destroyed, even when the schedule would prune them.
         public let snapshotsNotConsolidated: [String]
+        /// `String.Encoding.rawValue` for decoding command output; `4` is UTF-8.
         public let stringEncodingRawValue: UInt
         public var stringEncoding: String.Encoding { .init(rawValue: stringEncodingRawValue) }
 
@@ -332,7 +341,7 @@ extension Consolidator {
         public init(
             arguments: Arguments.Consolidate,
             dateFormatter: DateFormatter,
-            fileManager: FileManager,
+            fileSystem: FileSystem,
             jsonDecoder: JSONDecoder
         ) throws {
             datasetGrep = arguments.datasetGrep
@@ -344,7 +353,7 @@ extension Consolidator {
             schedule = if let consolidationPeriodPath = arguments.consolidationPeriodPath {
                 try decodeFromJSONAtPath(
                     consolidationPeriodPath,
-                    fileManager: fileManager,
+                    fileSystem: fileSystem,
                     jsonDecoder: jsonDecoder
                 )
             } else {
@@ -364,7 +373,7 @@ extension Consolidator {
             snapshotsNotConsolidated = if let doNotDeleteSnapshotsPath = arguments.doNotDeleteSnapshotsPath {
                 try decodeFromJSONAtPath(
                     doNotDeleteSnapshotsPath,
-                    fileManager: fileManager,
+                    fileSystem: fileSystem,
                     jsonDecoder: jsonDecoder
                 )
             } else {

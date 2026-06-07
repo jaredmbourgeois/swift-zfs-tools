@@ -32,7 +32,7 @@ final class SnapshotterConfigTest: XCTestCase {
     }
 
     func testConfigFromFile() throws {
-        let config: Snapshotter.Config = decodeResourceJSON(named: "SnapshotterConfig", fileManager: .default, jsonDecoder: JSONDecoder())
+        let config: Snapshotter.Config = try decodeResourceJSON(named: "SnapshotterConfig", fileManager: .default, jsonDecoder: JSONDecoder())
         XCTAssertEqual(Self.defaultConfig, config)
     }
 }

@@ -83,6 +83,117 @@ final class PoolUtilizationTest: XCTestCase {
         XCTAssertEqual(9_876_543_210, utilization.availableBytes)
     }
 
+    func testQueryReturnsZerosInDryRun() async throws {
+        // In dry-run swift-shell echoes each command as stdout instead of running it, so the
+        // "output" is the (non-numeric, unparseable) command text. The guard must stay a safe
+        // no-op and return zeros — not throw. Regression guard for the H2 fail-loud change.
+        let shell = ShellAtPath {
+            @Sendable (
+                _ command: ShellCommand,
+                _ dryRun: Bool,
+                _ estimatedOutputSize: Int?,
+                _ estimatedErrorSize: Int?,
+                _ statusesForResult: ShellTermination.StatusesForResult,
+                _ stream: ShellStream?,
+                _ timeout: TimeInterval?
+            ) async -> ShellResult in
+            // mimic swift-shell's dry-run: echo the command back as stdout
+            .success(stdout: command)!
+        }
+        let utilization = try await PoolUtilization.query(
+            pool: "tank",
+            shell: shell,
+            dryRun: true,
+            stringEncoding: .utf8,
+            lineSeparator: "\n"
+        )
+        XCTAssertEqual(PoolUtilization(capacityPercent: 0, usedBytes: 0, availableBytes: 0), utilization)
+    }
+
+    func testQueryThrowsOnUnparseableCapacity() async throws {
+        // Command succeeded (exit 0) but emitted garbage — fail loud rather than silently reading 0%.
+        let shell = ShellAtPath {
+            @Sendable (
+                _ command: ShellCommand,
+                _ dryRun: Bool,
+                _ estimatedOutputSize: Int?,
+                _ estimatedErrorSize: Int?,
+                _ statusesForResult: ShellTermination.StatusesForResult,
+                _ stream: ShellStream?,
+                _ timeout: TimeInterval?
+            ) async -> ShellResult in
+            if command.contains("zpool list") {
+                return .success(stdout: "not-a-number")!
+            }
+            return .success(stdout: "1234567890\t9876543210")!
+        }
+        do {
+            _ = try await PoolUtilization.query(pool: "tank", shell: shell, dryRun: false, stringEncoding: .utf8, lineSeparator: "\n")
+            XCTFail("expected query to throw on unparseable capacity")
+        } catch {
+            // expected
+        }
+    }
+
+    func testQueryThrowsOnUnparseableUsedAvailable() async throws {
+        let shell = ShellAtPath {
+            @Sendable (
+                _ command: ShellCommand,
+                _ dryRun: Bool,
+                _ estimatedOutputSize: Int?,
+                _ estimatedErrorSize: Int?,
+                _ statusesForResult: ShellTermination.StatusesForResult,
+                _ stream: ShellStream?,
+                _ timeout: TimeInterval?
+            ) async -> ShellResult in
+            if command.contains("zpool list") {
+                return .success(stdout: "42")!
+            }
+            return .success(stdout: "garbage-without-tab")!
+        }
+        do {
+            _ = try await PoolUtilization.query(pool: "tank", shell: shell, dryRun: false, stringEncoding: .utf8, lineSeparator: "\n")
+            XCTFail("expected query to throw on unparseable used/available")
+        } catch {
+            // expected
+        }
+    }
+
+    // MARK: - Dry-run + threshold does not throw (regression)
+
+    func testSnapshotDryRunWithThresholdDoesNotThrow() async throws {
+        // dry-run (execute: false, the default) + a pool threshold must print the plan, not error.
+        // swift-shell echoes commands in dry-run, which the fail-loud pool parser must tolerate.
+        let shell = ShellAtPath {
+            @Sendable (
+                _ command: ShellCommand,
+                _ dryRun: Bool,
+                _ estimatedOutputSize: Int?,
+                _ estimatedErrorSize: Int?,
+                _ statusesForResult: ShellTermination.StatusesForResult,
+                _ stream: ShellStream?,
+                _ timeout: TimeInterval?
+            ) async -> ShellResult in
+            .success(stdout: command)!
+        }
+        let config = Snapshotter.Config(
+            datasetGrep: "tank/data",
+            dateSeparator: Defaults.dateSeparator,
+            execute: false,
+            lineSeparator: Defaults.lineSeparator,
+            maxPoolUtilizationPercent: 80,
+            recursive: false,
+            stringEncodingRawValue: Defaults.stringEncoding.rawValue
+        )
+        let snapshotter = Snapshotter(
+            config: config,
+            date: { testDate },
+            dateFormatter: dateFormatter,
+            shell: shell
+        )
+        try await snapshotter.snapshot()
+    }
+
     // MARK: - Snapshot skips when over threshold
 
     func testSnapshotSkipsWhenOverThreshold() async throws {

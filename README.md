@@ -1,24 +1,26 @@
 # swift-zfs-tools
 
-CLI for ZFS snapshot lifecycle management: create, consolidate, sync, automate.
+A Swift 6 CLI for the full ZFS snapshot lifecycle — **create · consolidate · replicate · automate**. Dry-run by default, Grandfather-Father-Son retention, pool-aware pruning, incremental remote sync, and policy-as-JSON for cron. macOS 14+ and Linux.
 
-Built with Swift 6.0 using [swift-argument-parser](https://github.com/apple/swift-argument-parser) and [swift-shell](https://github.com/jaredmbourgeois/swift-shell). All operations are dry-run by default — pass `--execute true` to run commands against ZFS.
+- **Safe by default** — every command is printed, not executed, until you add `--execute true`.
+- **GFS retention** — keep 7 daily, 3 weekly, 11 monthly, then yearly forever; ~24 snapshots cover 3 years instead of ~1000.
+- **Pool-aware** — skip snapshots, or aggressively prune, when capacity or free space crosses a threshold.
+- **Incremental replication** — `zfs send | ssh zfs recv` with incremental deltas, remote-path remapping, and stale-snapshot cleanup.
+- **Policy as code** — save any command as JSON, commit it, and chain snapshot → consolidate → sync from one actions file in cron.
+- **Hardened** — shell-safe single-quoting, atomic config writes, fail-loud pool checks, complete Swift 6 strict concurrency.
 
-## Installation
+Built on [swift-argument-parser](https://github.com/apple/swift-argument-parser) and [swift-shell](https://github.com/jaredmbourgeois/swift-shell). The core logic ships as an importable library, `ZFSToolsModel`.
 
-### Pre-compiled Binaries
+## Install
 
-```
-bin/macos-arm64/zfs-tools     # macOS Apple Silicon
-bin/linux-x86_64/zfs-tools    # Linux x86_64
-```
+### Pre-compiled binaries
 
-Copy to your `$PATH`:
 ```bash
-cp bin/macos-arm64/zfs-tools /usr/local/bin/zfs-tools
+cp bin/macos-arm64/zfs-tools  /usr/local/bin/zfs-tools   # macOS Apple Silicon
+cp bin/linux-x86_64/zfs-tools /usr/local/bin/zfs-tools   # Linux x86_64
 ```
 
-### Build from Source
+### Build from source
 
 Requires [Swift 6.0+](https://www.swift.org/install/).
 
@@ -26,152 +28,214 @@ Requires [Swift 6.0+](https://www.swift.org/install/).
 git clone https://github.com/jaredmbourgeois/swift-zfs-tools.git
 cd swift-zfs-tools
 swift build -c release
-# Binary at .build/release/ZFSTools
+# binary at .build/release/ZFSTools
 ```
 
-Compile-time defaults (retention schedule, date format, etc.) can be customized in `sources/model/Defaults.swift` before building.
+Compile-time defaults (retention schedule, date format, shell) live in `sources/model/Defaults.swift`.
 
-## Quick Start
+## Quick start
 
 ```bash
-# Snapshot matching datasets (dry-run — shows commands without executing)
+# 1. Snapshot — dry-run first (prints commands, runs nothing)
 zfs-tools snapshot --dataset-grep tank/data --recursive true
 
-# Execute for real
+# 2. Looks right? Run it
 zfs-tools snapshot --dataset-grep tank/data --recursive true --execute true
 
-# Apply retention policy
+# 3. Prune to the GFS schedule
 zfs-tools consolidate --dataset-grep tank/data --execute true
 
-# Replicate to remote
-zfs-tools sync \
-  --dataset-grep tank/data \
-  --ssh-user admin --ssh-ip backup.server.com \
+# 4. Replicate to a backup host
+zfs-tools sync --dataset-grep tank/data \
+  --ssh-user backup --ssh-ip backup.server.com \
   --ssh-port 22 --ssh-key-path ~/.ssh/backup_key \
   --execute true
 ```
 
+Every command discovers datasets with `zfs list -o name -H | grep <pattern>`, then builds shell-safe ZFS commands. The commands it runs, single-quoted against spaces and metacharacters:
+
+```bash
+zfs snapshot -r 'tank/data@20250607-120000'
+zfs destroy 'tank/data@20250101-000000'
+zfs send -v -i 'tank/data@<prev>' 'tank/data@<latest>' \
+  | ssh -p '22' -i '~/.ssh/backup_key' 'backup'@'backup.server.com' zfs recv -F 'tank/data@<latest>'
+```
+
+## Dry-run by default
+
+`--execute` defaults to `false`. In dry-run, nothing touches ZFS — each command is printed instead of run, so you can inspect exactly what a cron job will do before trusting it. Add `--execute true` to apply. Every run logs each command with its exit status and any stdout/stderr (prefixed `zfs-tools command:`), so real runs are auditable too.
+
 ## Commands
 
-Each operation supports three variants:
+Each operation has three variants:
 
-| Pattern | Description |
-|---------|-------------|
-| `<command>` | Run directly with inline arguments |
-| `<command>-configure` | Save arguments as a reusable JSON config |
-| `<command>-configured` | Run from a saved JSON config |
+| Variant | Use |
+|---------|-----|
+| `<command>` | Run directly with inline flags |
+| `<command>-configure` | Save those flags to a reusable JSON config (`--output-path`) |
+| `<command>-configured` | Run from a saved JSON config (`--config-path`) |
 
-### snapshot / snapshot-configure / snapshot-configured
+### snapshot
 
-Creates timestamped ZFS snapshots (`zfs snapshot [-r] dataset@yyyyMMdd-HHmmss`).
+Creates timestamped snapshots: `zfs snapshot [-r] 'dataset@yyyyMMdd-HHmmss'`.
 
 | Option | Description |
 |--------|-------------|
 | `--dataset-grep` | Filter datasets by name pattern (all if omitted) |
-| `--recursive` | Recursively snapshot child datasets (`-r`) |
-| `--max-pool-utilization` | Skip if pool capacity exceeds this percentage (0-100) |
-| `--min-free-bytes` | Skip if pool free space is below this threshold |
+| `--recursive` | Snapshot child datasets too (`-r`) |
+| `--max-pool-utilization` | Skip if pool capacity exceeds this percent (0–100) |
+| `--min-free-bytes` | Skip if pool free space is below this many bytes |
 
-### consolidate / consolidate-configure / consolidate-configured
+### consolidate
 
-Applies a [GFS](https://en.wikipedia.org/wiki/Backup_rotation_scheme#Grandfather-father-son) retention schedule, destroying snapshots outside the retention windows while keeping the best-distributed snapshots within each period.
-
-| Option | Description |
-|--------|-------------|
-| `--dataset-grep` | Filter datasets by name pattern |
-| `--consolidation-period-path` | Path to custom schedule JSON (overrides default) |
-| `--consolidation-period-upper-bound` | Override the schedule's reference time |
-| `--do-not-delete-snapshots-path` | Path to JSON array of protected snapshot names |
-| `--max-pool-utilization` | Aggressive prune after consolidation if exceeded |
-| `--min-free-bytes` | Aggressive prune after consolidation if below threshold |
-
-### sync / sync-configure / sync-configured
-
-Replicates snapshots to a remote system via `zfs send | ssh zfs recv`. Uses incremental sends when a common snapshot exists. Deletes remote snapshots that no longer exist locally. Sends/receives sequentially since [ZFS receive locks the dataset](https://docs.oracle.com/cd/E18752_01/html/819-5461/gbchx.html).
+Applies a [GFS](https://en.wikipedia.org/wiki/Backup_rotation_scheme#Grandfather-father-son) retention schedule, destroying snapshots outside the windows while keeping the best-distributed snapshot within each. See [Retention](#retention).
 
 | Option | Description |
 |--------|-------------|
 | `--dataset-grep` | Filter datasets by name pattern |
-| `--ssh-user` | SSH user for remote |
-| `--ssh-ip` | SSH host for remote |
-| `--ssh-port` | SSH port for remote |
-| `--ssh-key-path` | SSH key path for remote |
+| `--consolidation-period-path` | Custom schedule JSON (overrides the default) |
+| `--consolidation-period-upper-bound` | Schedule reference time (default: now), parsed with `--date-format` |
+| `--do-not-delete-snapshots-path` | JSON array of snapshot names to always keep |
+| `--max-pool-utilization` | After consolidation, aggressively prune if capacity still exceeds this percent |
+| `--min-free-bytes` | After consolidation, aggressively prune if free space is still below this |
 
-### execute-actions / execute-actions-configure
+### sync
 
-Chains multiple operations from a JSON actions file:
+Replicates snapshots to a remote host via `zfs send | ssh zfs recv` — incremental when a common snapshot exists, full otherwise. Remote snapshots that no longer exist locally are destroyed. Sends run sequentially, since [ZFS receive locks the dataset](https://docs.oracle.com/cd/E18752_01/html/819-5461/gbchx.html). See [Remote sync](#remote-sync).
 
-```json
-[
-  {"snapshot": {"configPath": "/path/to/snapshot.json"}},
-  {"consolidate": {"configPath": "/path/to/consolidate.json"}},
-  {"sync": {"configPath": "/path/to/sync.json"}}
-]
-```
+| Option | Description |
+|--------|-------------|
+| `--dataset-grep` | Filter datasets by name pattern |
+| `--ssh-user` / `--ssh-ip` / `--ssh-port` / `--ssh-key-path` | Remote connection |
+| `--remote-path-strip` | Strip this prefix from each dataset path before sending |
+| `--remote-path-root` | Prepend this root to the (stripped) path on the remote |
+
+### execute-actions
+
+Chains snapshot / consolidate / sync from one JSON file — each entry points at a saved config. Ideal for cron.
 
 ```bash
 zfs-tools execute-actions --actions-path ~/zfs/backup.json --execute true
+zfs-tools execute-actions-configure --output-path ~/zfs/backup.json   # writes a template
 ```
 
-Automate with cron:
-```
+```cron
 0 1 * * * /usr/local/bin/zfs-tools execute-actions --actions-path ~/zfs/backup.json --execute true
 ```
 
-## Retention Policy
+## Retention
 
-The default consolidation schedule (defined in `Defaults.swift`):
+The default schedule (`Defaults.swift`):
 
-| Period | Retention |
-|--------|-----------|
-| Daily | 1 snapshot/day for 7 days |
-| Weekly | 1 snapshot/week for 3 weeks |
-| Monthly | 1 snapshot/month for 11 months |
-| Yearly | 1 snapshot/year indefinitely |
+| Period | Keep |
+|--------|------|
+| Daily | 1 / day for 7 days |
+| Weekly | 1 / week for 3 weeks |
+| Monthly | 1 / month for 11 months |
+| Yearly | 1 / year, forever |
 
-Within each period, the consolidator keeps snapshots closest to the ideal evenly-distributed dates, destroying the rest. Snapshots newer than the schedule's upper bound are always preserved.
+Within each period the consolidator keeps the snapshot closest to each ideal evenly-spaced date and destroys the rest. Snapshots newer than the schedule's upper bound, and any named in `--do-not-delete-snapshots-path`, are always preserved.
 
-Custom schedules can be defined as JSON (see `tests/resource/ConsolidatorConfig.json`) and loaded via `--consolidation-period-path`.
+This is the point of consolidation: **3 years of daily snapshots is ~1000 snapshots; under this schedule it collapses to ~24** (7 daily + 3 weekly + 11 monthly + ~3 yearly) while keeping fine-grained recent history and coarse-grained old history.
 
-## Disk Usage Monitoring
+Define a custom schedule as JSON and load it with `--consolidation-period-path`. Each period sets how many `snapshots` to keep `every` `everyMultiple` × `everyPeriod` (`days`/`weeks`/`months`/`years`/`hours`), `repetitions` times (omit `repetitions` for "forever"):
 
-Snapshot and consolidate commands support pool utilization thresholds to prevent filling the pool:
+```json
+{
+  "periods": [
+    { "everyMultiple": 1, "everyPeriod": "days",   "repetitions": 7,  "snapshots": 1 },
+    { "everyMultiple": 1, "everyPeriod": "weeks",  "repetitions": 3,  "snapshots": 1 },
+    { "everyMultiple": 1, "everyPeriod": "months", "repetitions": 11, "snapshots": 1 },
+    { "everyMultiple": 1, "everyPeriod": "years",                     "snapshots": 1 }
+  ],
+  "upperBound": null
+}
+```
+
+## Pool-utilization guards
+
+`snapshot` and `consolidate` can read pool capacity (`zpool list`) and free space (`zfs list`) and act on a threshold — either `--max-pool-utilization` (percent) or `--min-free-bytes`:
 
 ```bash
-# Skip snapshots if pool is over 80% full
+# Don't add snapshots once the pool passes 80% full
 zfs-tools snapshot --dataset-grep tank/data --max-pool-utilization 80 --execute true
 
-# Aggressive prune if less than 5GB free after consolidation
+# Consolidate, then keep pruning oldest snapshots until ≥ 5 GiB is free
 zfs-tools consolidate --dataset-grep tank/data --min-free-bytes 5368709120 --execute true
 ```
 
-When a threshold is exceeded:
-- **Snapshot**: skips creation and prints a warning
-- **Consolidate**: runs normal retention first, then aggressively prunes oldest snapshots (preserving the most recent per dataset) until utilization drops below the threshold
+- **snapshot** skips creation and warns:
+  `zfs-tools snapshot: WARNING — pool tank utilization exceeds threshold (capacity: 86.0%, available: … bytes). Skipping snapshot creation.`
+- **consolidate** runs the normal schedule first, then — if still over the line — aggressively prunes the oldest snapshots one at a time (always keeping the most recent per dataset, plus anything protected) until utilization drops back under the threshold.
 
-These options are available in CLI flags, JSON configs, and `Defaults.swift`.
+Pool reads are fail-loud: if a real run gets unparseable output from ZFS, it errors rather than reading 0% and letting a full pool slip past the guard. (In dry-run the guard is inert.)
 
-## Common Options
+## Remote sync
+
+Remote-path remapping redirects where snapshots land on the destination. `--remote-path-strip` removes a prefix from each local path; `--remote-path-root` prepends a new one:
+
+```bash
+# local  tank/data/photos
+# strip  tank   →  data/photos
+# root   backups/prod  →  backups/prod/data/photos
+zfs-tools sync --dataset-grep tank/data \
+  --remote-path-strip tank --remote-path-root backups/prod \
+  --ssh-user backup --ssh-ip backup.server.com --ssh-port 22 --ssh-key-path ~/.ssh/backup_key \
+  --execute true
+```
+
+With neither flag set, the receive path matches the send path. Both are optional; the remote dataset listing is filtered with the remapped pattern so incremental-base detection works against the destination's real names.
+
+## Configuration reference
+
+`<command>-configure` writes one of these; `<command>-configured` reads it. JSON is the schema — field names match the `Config` types in `ZFSToolsModel`. `stringEncodingRawValue: 4` is UTF-8. Live examples: [`tests/resource/`](tests/resource/).
+
+```json
+// snapshot
+{ "datasetGrep": "tank/data", "recursive": true, "execute": false,
+  "dateSeparator": "@", "lineSeparator": "\n", "stringEncodingRawValue": 4 }
+```
+
+```json
+// sync — remotePathStrip / remotePathRoot are optional
+{ "datasetGrep": "tank/data", "execute": false,
+  "sshUser": "backup", "sshIP": "backup.server.com", "sshPort": "22", "sshKeyPath": "~/.ssh/backup_key",
+  "dateSeparator": "@", "lineSeparator": "\n", "stringEncodingRawValue": 4 }
+```
+
+```json
+// actions — chain saved configs in order
+[
+  { "snapshot":    { "configPath": "/zfs/tank-data-snapshot.json" } },
+  { "consolidate": { "configPath": "/zfs/tank-data-consolidate.json" } },
+  { "sync":        { "configPath": "/zfs/tank-data-sync.json" } }
+]
+```
+
+A consolidate config wraps the [schedule](#retention) shown above plus `datasetGrep`, `snapshotsNotConsolidated`, and the common fields — see [`tests/resource/ConsolidatorConfig.json`](tests/resource/ConsolidatorConfig.json).
+
+## Common options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--execute` | `false` | Execute commands (dry-run if false) |
+| `--execute` | `false` | Run commands (dry-run when false) |
 | `--date-format` | `yyyyMMdd-HHmmss` | Snapshot timestamp format |
 | `--date-separator` | `@` | Separator between dataset name and timestamp |
-| `--shell-path` | `/bin/bash` | Shell used for command execution |
+| `--shell-path` | `/bin/bash` | Shell used to run commands |
+
+## Under the hood
+
+- Read-only listings (datasets, snapshots, pool stats) and per-dataset `zfs snapshot` run **in parallel**; `destroy` and `send`/`recv` run **sequentially** (ZFS receive locks the dataset).
+- Every interpolated value is **single-quoted** for the shell (embedded quotes escaped `'\''`), so dataset names with spaces and grep patterns can't word-split or inject.
+- Saved configs are written **atomically** (temp file + rename) — an interrupted write can't corrupt a config.
+- Built for **complete Swift 6 strict concurrency**; shell execution and file I/O are injected as `@Sendable` witnesses, which is what makes the core unit-testable without a live pool.
 
 ## References
 
-- [OpenZFS documentation](https://openzfs.github.io/openzfs-docs/)
-- [zfs(8) man page](https://openzfs.github.io/openzfs-docs/man/master/8/zfs.8.html)
-- [zfs-send(8)](https://openzfs.github.io/openzfs-docs/man/master/8/zfs-send.8.html) / [zfs-recv(8)](https://openzfs.github.io/openzfs-docs/man/master/8/zfs-receive.8.html)
+- [OpenZFS docs](https://openzfs.github.io/openzfs-docs/) · [zfs(8)](https://openzfs.github.io/openzfs-docs/man/master/8/zfs.8.html) · [zfs-send(8)](https://openzfs.github.io/openzfs-docs/man/master/8/zfs-send.8.html) / [zfs-recv(8)](https://openzfs.github.io/openzfs-docs/man/master/8/zfs-receive.8.html)
 
 ## License
 
-Licensed under Apache License v2.0 with Runtime Library Exception
+Apache License v2.0 with Runtime Library Exception.
 
-I hope you enjoy using zfs-tools! If you would like to show your support, coffee donations are always appreciated!
-
-BTC: `3ACMiYCiknTp4VoSE9Zxc2JnaxmDAMGBqH`
-ETH: `0xD97F48B5Ab68285c58BD1D11dE87a166A7C4D0b0`
-SOL: `LW3j5Zv54a8qD7dzZ5KdpfE6UssFAGj48uM1DhJCeSN`
+Enjoying zfs-tools? Coffee donations are appreciated — BTC `3ACMiYCiknTp4VoSE9Zxc2JnaxmDAMGBqH` · ETH `0xD97F48B5Ab68285c58BD1D11dE87a166A7C4D0b0` · SOL `LW3j5Zv54a8qD7dzZ5KdpfE6UssFAGj48uM1DhJCeSN`

@@ -8,12 +8,18 @@
 import Foundation
 import Shell
 
+/// Replicates local snapshots to a remote host over SSH (`zfs send | ssh zfs recv`). Sends
+/// incrementally from the most recent common snapshot when one exists, full otherwise; destroys
+/// remote snapshots that no longer exist locally. Optional path remapping redirects where datasets
+/// land on the destination.
 public struct Syncer: Sendable {
     private let config: Syncer.Config
     private let dateFormatter: DateFormatter
     private let shell: ShellAtPath
     private let sshLogin: String
 
+    /// Builds the `ssh` login from `config` (shell-quoted); `shell` runs the commands (inject a mock
+    /// to test).
     public init(
         config: Syncer.Config,
         dateFormatter: DateFormatter,
@@ -22,9 +28,11 @@ public struct Syncer: Sendable {
         self.config = config
         self.dateFormatter = dateFormatter
         self.shell = shell
-        sshLogin = "ssh -p \(config.sshPort) -i \(config.sshKeyPath) \(config.sshUser)@\(config.sshIP)"
+        sshLogin = "ssh -p \(config.sshPort.shellQuoted) -i \(config.sshKeyPath.shellQuoted) \(config.sshUser.shellQuoted)@\(config.sshIP.shellQuoted)"
     }
 
+    /// Replicate every matching dataset: destroy remote-only snapshots, then send each new local
+    /// snapshot (incremental where possible). Sends run sequentially — ZFS receive locks the dataset.
     public func sync() async throws {
         let datasets = try await datasets()
         // send and receive sequentially since ZFS receive locks dataset and its descendents
@@ -41,9 +49,9 @@ public struct Syncer: Sendable {
             for snapshotToSend in dataset.snapshotsLocalToSend {
                 sendCommand = "zfs send -v"
                 if let previousSnapshot = snapshotToSend.previous {
-                    sendCommand += " -i \(previousSnapshot.snapshot)"
+                    sendCommand += " -i \(previousSnapshot.snapshot.shellQuoted)"
                 }
-                sendCommand += " \(snapshotToSend.this.snapshot) | \(sshLogin) zfs recv -F \(forwardPath(snapshotToSend.this.snapshot))"
+                sendCommand += " \(snapshotToSend.this.snapshot.shellQuoted) | \(sshLogin) zfs recv -F \(forwardPath(snapshotToSend.this.snapshot).shellQuoted)"
                 _ = try await shell.execute(
                     sendCommand,
                     dryRun: !config.execute
@@ -55,41 +63,29 @@ public struct Syncer: Sendable {
     private func datasets() async throws -> [DatasetSnapshotOperation] {
         // Three parallel listings (2 local + 1 remote SSH). All read-only at the
         // ZFS layer; the parallelism is meaningful when the remote SSH RTT is
-        // high. Requires swift-shell ≥1.4.1; 1.2.3 c21a673 serialized this as a
+        // high. Safe under swift-shell 2.0.0; 1.2.3 c21a673 serialized this as a
         // workaround for the pre-1.4.1 swift-shell pipe-drain race that lost
         // stdout under parallel use, fixed in swift-shell 1.4.1.
-        async let datasetsLocalBinding: [String] = try await shell.execute(
-                ZFS.listDatasets(grepping: config.datasetGrep),
-                dryRun: !config.execute
-            )
-            .get()
-            .decodeStringLines(
-                encoding: config.stringEncoding,
-                lineSeparator: config.lineSeparator
-            )
-            .stdoutTyped
-        async let snapshotsLocalBinding: [String] = try await shell.execute(
-                ZFS.listSnapshots(grepping: config.datasetGrep),
-                dryRun: !config.execute
-            )
-            .get()
-            .decodeStringLines(
-                encoding: config.stringEncoding,
-                lineSeparator: config.lineSeparator
-            )
-            .stdoutTyped
+        async let datasetsLocalBinding: [String] = try await shell.lines(
+            ZFS.listDatasets(grepping: config.datasetGrep),
+            dryRun: !config.execute,
+            encoding: config.stringEncoding,
+            lineSeparator: config.lineSeparator
+        )
+        async let snapshotsLocalBinding: [String] = try await shell.lines(
+            ZFS.listSnapshots(grepping: config.datasetGrep),
+            dryRun: !config.execute,
+            encoding: config.stringEncoding,
+            lineSeparator: config.lineSeparator
+        )
         // Remote datasets carry the path transform; grep with the transformed pattern so the
         // remote-side `zfs list ... | grep` actually matches.
-        async let snapshotsRemoteRawBinding: [String] = try await shell.execute(
-                remote(ZFS.listSnapshots(grepping: remoteDatasetGrep)),
-                dryRun: !config.execute
-            )
-            .get()
-            .decodeStringLines(
-                encoding: config.stringEncoding,
-                lineSeparator: config.lineSeparator
-            )
-            .stdoutTyped
+        async let snapshotsRemoteRawBinding: [String] = try await shell.lines(
+            remote(ZFS.listSnapshots(grepping: remoteDatasetGrep)),
+            dryRun: !config.execute,
+            encoding: config.stringEncoding,
+            lineSeparator: config.lineSeparator
+        )
         let (
             datasetsLocal,
             snapshotsLocal,
@@ -158,6 +154,17 @@ public struct Syncer: Sendable {
         }
     }
 
+    /// Prefixes `command` with the ssh login so it runs on the remote host.
+    ///
+    /// Two deliberate properties:
+    /// - **Quoting depth.** Interpolated values are single-quoted for the *local* shell. `ssh` then
+    ///   re-parses the command on the *remote* shell, so a value containing spaces/metacharacters
+    ///   would be re-split remotely (single-level quoting only). This is safe because ZFS
+    ///   dataset/snapshot names can't contain such characters (OpenZFS naming rules); we don't
+    ///   double-quote.
+    /// - **Local pipe.** When `command` contains `… | grep … || true` (the list builders), the pipe
+    ///   is interpreted by the *local* shell — the remote `zfs list` streams to a local `grep`. That
+    ///   is intentional; wrapping the whole remote command in quotes would move the grep remote-side.
     private func remote(_ command: String) -> String {
         "\(sshLogin) \(command)"
     }
@@ -199,6 +206,9 @@ public struct Syncer: Sendable {
 }
 
 extension Syncer {
+    /// A sync run as a `Codable` value — the `sync-configure` / `sync-configured` JSON schema. Build
+    /// it from CLI `Arguments.Sync` or decode it from a saved config file. `remotePathStrip` /
+    /// `remotePathRoot` are optional; with both unset the receive path matches the send path.
     public struct Config: Codable, Sendable, Equatable {
         let datasetGrep: String?
         let dateSeparator: String

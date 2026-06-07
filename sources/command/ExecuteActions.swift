@@ -18,7 +18,7 @@ struct ExecuteActions: AsyncParsableCommand {
         let jsonDecoder = JSONDecoder()
         let actions: [Action] = try decodeFromJSONAtPath(
             arguments.actionsPath,
-            fileManager: .default,
+            fileSystem: .live,
             jsonDecoder: jsonDecoder
         )
         let calendar = makeCalendar()
@@ -26,7 +26,7 @@ struct ExecuteActions: AsyncParsableCommand {
         let executor = ActionExecutor(
             calendar: calendar,
             dateFormatter: dateFormatter,
-            fileManager: { .default },
+            fileSystem: .live,
             jsonDecoder: jsonDecoder,
             shell: Shell(arguments: arguments.common)
         )
@@ -46,7 +46,7 @@ struct ExecuteActionsConfigure: ParsableCommand {
                 Action.sync(configPath: "/path/to/sync/config.json"),
             ],
             toJSONAtPath: arguments.outputPath,
-            fileManager: .default,
+            fileSystem: .live,
             jsonEncoder: .init()
         )
     }

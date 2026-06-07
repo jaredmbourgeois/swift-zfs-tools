@@ -8,12 +8,17 @@
 import Foundation
 import Shell
 
+/// Creates timestamped ZFS snapshots for every dataset matching `config.datasetGrep`, one task per
+/// dataset in parallel. Optionally guarded by a pool-utilization threshold. Honors dry-run via
+/// `config.execute`.
 public struct Snapshotter: Sendable {
     private let config: Config
     private let dateFormatter: DateFormatter
     private let date: @Sendable () -> Date
     private let shell: ShellAtPath
 
+    /// `date`/`dateFormatter` build each snapshot's timestamp suffix; `shell` runs the commands
+    /// (inject a mock to test).
     public init(
         config: Config,
         date: @Sendable @escaping () -> Date,
@@ -26,6 +31,8 @@ public struct Snapshotter: Sendable {
         self.shell = shell
     }
 
+    /// Snapshot every matching dataset (`zfs snapshot [-r] 'dataset@<timestamp>'`). If a pool
+    /// threshold is set and exceeded, skips creation and returns without snapshotting.
     public func snapshot() async throws {
         if config.maxPoolUtilizationPercent != nil || config.minFreeBytes != nil,
            let pool = PoolUtilization.poolName(from: config.datasetGrep) {
@@ -44,34 +51,30 @@ public struct Snapshotter: Sendable {
                 return
             }
         }
-        let datasets = try await shell.execute(
+        let datasets = try await shell.lines(
             ZFS.listDatasets(grepping: config.datasetGrep),
-            dryRun: !config.execute
-        )
-        .get()
-        .decodeStringLines(
+            dryRun: !config.execute,
             encoding: .init(rawValue: config.stringEncodingRawValue),
             lineSeparator: config.lineSeparator
         )
-        .stdoutTyped
         // Per-dataset `zfs snapshot` calls in parallel. Each is independent at the
         // ZFS layer — distinct datasets share the pool's TXG batch but the kernel
         // serializes metadata commits transparently, so parallelism is safe and
-        // saves wall time when N is large. Requires swift-shell ≥1.4.1 — pre-1.4.1
-        // had a pipe-drain race that lost stdout (empty-output on macOS / hard
-        // libdispatch segfault on Swift 6.3.1 / Linux) under parallel use.
+        // saves wall time when N is large. Safe under swift-shell 2.0.0 — the
+        // pre-1.4.1 pipe-drain race that lost stdout (empty-output on macOS / hard
+        // libdispatch segfault on Swift 6.3.1 / Linux) under parallel use was fixed
+        // in 1.4.1; 2.0.0 adds Linux support via dedicated reader threads.
         try await withThrowingDiscardingTaskGroup { taskGroup in
             for dataset in datasets {
                 taskGroup.addTask {
                     _ = try await shell.execute(
-                        {
-                            var command = "zfs snapshot"
-                            if config.recursive {
-                              command += " -r"
-                            }
-                            command += " \(dataset)\(config.dateSeparator)\(dateFormatter.string(from: date()))"
-                            return command
-                        }(),
+                        ZFS.snapshot(
+                            dataset: dataset,
+                            date: date(),
+                            dateFormatter: dateFormatter,
+                            dateSeparator: config.dateSeparator,
+                            recursive: config.recursive
+                        ),
                         dryRun: !config.execute
                     )
                     .get()
@@ -83,14 +86,22 @@ public struct Snapshotter: Sendable {
 }
 
 extension Snapshotter {
+    /// A snapshot run as a `Codable` value — the `snapshot-configure` / `snapshot-configured` JSON
+    /// schema. Build it from CLI `Arguments.Snapshot` or decode it from a saved config file.
     public struct Config: EquatableModel {
+        /// Only snapshot datasets whose `zfs list` name matches this `grep` pattern; `nil` = all.
         public let datasetGrep: String?
         public let dateSeparator: String
+        /// When `false` (the default), commands are printed but not run.
         public let execute: Bool
         public let lineSeparator: String
+        /// Skip snapshotting if pool capacity exceeds this percent (0–100); `nil` disables the guard.
         public let maxPoolUtilizationPercent: Float?
+        /// Skip snapshotting if pool free space is below this many bytes; `nil` disables the guard.
         public let minFreeBytes: Int64?
+        /// Pass `-r` to snapshot child datasets recursively.
         public let recursive: Bool
+        /// `String.Encoding.rawValue` for decoding command output; `4` is UTF-8.
         public let stringEncodingRawValue: String.Encoding.RawValue
 
         public init(

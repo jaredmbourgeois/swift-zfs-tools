@@ -7,12 +7,14 @@
 
 import Foundation
 
+/// Decode a `T` from the JSON file at `path`, read through the injectable `fileSystem`. Throws
+/// `ErrorType.fileNotFound` if the file is missing, `ErrorType.jsonDecodeFailed` if it won't decode.
 public func decodeFromJSONAtPath<T: Decodable>(
     _ path: String,
-    fileManager: FileManager,
+    fileSystem: FileSystem,
     jsonDecoder: JSONDecoder
 ) throws -> T {
-    guard let data = fileManager.contents(atPath: path) else {
+    guard let data = fileSystem.contents(path) else {
         throw ErrorType.fileNotFound(path: path)
     }
     let type: T
@@ -24,14 +26,16 @@ public func decodeFromJSONAtPath<T: Decodable>(
     return type
 }
 
+/// Encode `encodable` to pretty-printed JSON and write it through `fileSystem` (atomically, in the
+/// `.live` implementation). Appends `.json` to `path` if missing. Throws `ErrorType.jsonEncodeFailed`
+/// or `ErrorType.writeToURL` on failure.
 public func encode<T: Encodable>(
     _ encodable: T,
     toJSONAtPath path: String,
-    fileManager: FileManager,
+    fileSystem: FileSystem,
     jsonEncoder: JSONEncoder
 ) throws {
     let path = path.lowercased().contains(".json") ? path : path + ".json"
-    let url = URL(fileURLWithPath: path)
     let currentFormatting = jsonEncoder.outputFormatting
     defer { jsonEncoder.outputFormatting = currentFormatting }
     jsonEncoder.outputFormatting = jsonEncoder.outputFormatting.union(.prettyPrinted)
@@ -42,8 +46,8 @@ public func encode<T: Encodable>(
         throw ErrorType.jsonEncodeFailed(type: T.self, error: error, path: path)
     }
     do {
-        try data.write(to: url)
+        try fileSystem.write(data, path)
     } catch {
-        throw ErrorType.writeToURL(url, error: error)
+        throw ErrorType.writeToURL(URL(fileURLWithPath: path), error: error)
     }
 }

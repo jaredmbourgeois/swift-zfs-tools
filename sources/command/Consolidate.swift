@@ -23,7 +23,7 @@ struct Consolidate: AsyncParsableCommand {
             config: try Consolidator.Config(
                 arguments: arguments,
                 dateFormatter: dateFormatter,
-                fileManager: .default,
+                fileSystem: .live,
                 jsonDecoder: .init()
             ),
             date: date,
@@ -39,17 +39,16 @@ struct ConsolidateConfigure: ParsableCommand {
     var arguments: Arguments.ConsolidateConfigure
 
     func run() throws {
-        let fileManager = FileManager.default
         let dateFormatter = makeDateFormatter(arguments.consolidate.common.dateFormat ?? Defaults.dateFormat)
         try encode(
             try Consolidator.Config(
                 arguments: arguments.consolidate,
                 dateFormatter: dateFormatter,
-                fileManager: fileManager,
+                fileSystem: .live,
                 jsonDecoder: .init()
             ),
             toJSONAtPath: arguments.outputPath,
-            fileManager: fileManager,
+            fileSystem: .live,
             jsonEncoder: .init()
         )
     }
@@ -60,11 +59,10 @@ struct ConsolidateConfigured: AsyncParsableCommand {
     var arguments: Arguments.ConsolidateConfigured
 
     func run() async throws {
-        let fileManager = FileManager.default
         let jsonDecoder = JSONDecoder()
         let config: Consolidator.Config = try decodeFromJSONAtPath(
             arguments.configPath,
-            fileManager: fileManager,
+            fileSystem: .live,
             jsonDecoder: jsonDecoder
         )
         let calendar = makeCalendar()

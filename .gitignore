@@ -1,6 +1,9 @@
 make_bins.sh
 /.build
 /build
+*.o
+*.d
+*.swiftdeps
 DerivedData/
 .DS_Store
 .idea

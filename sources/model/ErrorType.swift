@@ -7,44 +7,55 @@
 
 import Foundation
 
+/// The tool's error type. Each case captures a source `location` (file/function/line) via the
+/// matching static factory and renders a diagnostic via `debugDescription`.
 public enum ErrorType: Error, CustomDebugStringConvertible {
+    /// A `Calendar` date computation (e.g. stepping a schedule period) returned no result.
     case dateFromCalendar(date: Date, location: String)
     public static func dateFromCalendar(date: Date, file: String = #file, function: String = #function, line: Int = #line) -> Self {
         .dateFromCalendar(date: date, location: location(file: file, function: function, line: line))
     }
 
+    /// A string didn't parse as a date in the expected `format` (e.g. a snapshot suffix or upper bound).
     case dateFromString(string: String, format: String, location: String)
     public static func dateFromString(string: String, format: String, file: String = #file, function: String = #function, line: Int = #line) -> Self {
         .dateFromString(string: string, format: format, location: location(file: file, function: function, line: line))
     }
 
+    /// No file (or no readable file) at `path`.
     case fileNotFound(path: String, location: String)
     public static func fileNotFound(path: String, file: String = #file, function: String = #function, line: Int = #line) -> Self {
         .fileNotFound(path: path, location: location(file: file, function: function, line: line))
     }
 
+    /// JSON at `path` couldn't be decoded into the expected `type`.
     case jsonDecodeFailed(type: String, error: any Error, path: String, location: String)
     public static func jsonDecodeFailed<T>(type: T.Type, error: any Error, path: String, file: String = #file, function: String = #function, line: Int = #line) -> Self {
         .jsonDecodeFailed(type: String(reflecting: type), error: error, path: path, location: location(file: file, function: function, line: line))
     }
 
+    /// A value of `type` couldn't be encoded to JSON for `path`.
     case jsonEncodeFailed(type: String, error: any Error, path: String, location: String)
     public static func jsonEncodeFailed<T>(type: T.Type, error: any Error, path: String, file: String = #file, function: String = #function, line: Int = #line) -> Self {
         .jsonEncodeFailed(type: String(reflecting: type), error: error, path: path, location: location(file: file, function: function, line: line))
     }
 
+    /// A shell `command` ran but produced an error or unparseable output.
     case shellError(command: String, error: String, location: String)
     public static func shellError(command: String, error: String, file: String = #file, function: String = #function, line: Int = #line) -> Self {
         .shellError(command: command, error: error, location: location(file: file, function: function, line: line))
     }
 
+    /// A shell `command` exited with a non-success status.
     case shellFailure(command: String, location: String)
     public static func shellFailure(command: String, file: String = #file, function: String = #function, line: Int = #line) -> Self {
         .shellFailure(command: command, location: location(file: file, function: function, line: line))
     }
 
+    /// `path` couldn't be formed into a valid URL.
     case urlInvalid(path: String, location: String)
 
+    /// Writing to `url` failed.
     case writeToURL(_ url: URL, error: any Error, location: String)
     public static func writeToURL(_ url: URL, error: any Error, file: String = #file, function: String = #function, line: Int = #line) -> Self {
         .writeToURL(url, error: error, location: location(file: file, function: function, line: line))

@@ -8,6 +8,9 @@
 import ArgumentParser
 import Foundation
 
+/// Namespace for the CLI's parsed argument groups — one `ParsableArguments` struct per command.
+/// Each `Config` type builds from the matching group here. Per-flag help lives in the `@Option`
+/// definitions below.
 public enum Arguments {
     case consolidate(Consolidate)
     case consolidateConfigure(ConsolidateConfigure)
@@ -18,6 +21,7 @@ public enum Arguments {
 }
 
 extension Arguments {
+    /// Options shared by every command: dry-run, date format/separator, shell, output encoding.
     public struct Common: ParsableArguments, Sendable {
         public static let optionGroupTitle = "Swift ZFS Tools Common Options"
 
@@ -50,6 +54,7 @@ extension Arguments {
 }
 
 extension Arguments {
+    /// Arguments for `execute-actions`: run a chain of saved configs from one actions file.
     public struct ExecuteActions: ParsableArguments, Sendable {
         @OptionGroup(title: Common.optionGroupTitle)
         public var common: Common
@@ -61,6 +66,7 @@ extension Arguments {
         public init() {}
     }
 
+    /// Arguments for `execute-actions-configure`: write an example actions file.
     public struct ExecuteActionsConfigure: ParsableArguments, Sendable {
         @Option(help: "\(Self.outputPathHelp)")
         public var outputPath: String
@@ -71,6 +77,7 @@ extension Arguments {
 }
 
 extension Arguments {
+    /// Arguments for `consolidate`: apply a retention schedule, optionally pool-guarded.
     public struct Consolidate: ParsableArguments, Sendable {
         @OptionGroup(title: Common.optionGroupTitle)
         public var common: Common
@@ -102,6 +109,7 @@ extension Arguments {
         public init() {}
     }
 
+    /// Arguments for `consolidate-configure`: save a `Consolidator.Config` to JSON.
     public struct ConsolidateConfigure: ParsableArguments, Sendable {
         @OptionGroup(title: Common.optionGroupTitle)
         public var consolidate: Consolidate
@@ -113,6 +121,7 @@ extension Arguments {
         public init() {}
     }
 
+    /// Arguments for `consolidate-configured`: run consolidation from a saved config.
     public struct ConsolidateConfigured: ParsableArguments, Sendable {
         @OptionGroup(title: Common.optionGroupTitle)
         public var common: Common
@@ -126,6 +135,7 @@ extension Arguments {
 }
 
 extension Arguments {
+    /// Arguments for `snapshot`: create timestamped snapshots, optionally pool-guarded.
     public struct Snapshot: ParsableArguments, Sendable {
         @OptionGroup(title: Common.optionGroupTitle)
         public var common: Common
@@ -149,6 +159,7 @@ extension Arguments {
         public init() {}
     }
 
+    /// Arguments for `snapshot-configure`: save a `Snapshotter.Config` to JSON.
     public struct SnapshotConfigure: ParsableArguments, Sendable {
         @OptionGroup(title: "Snapshot options")
         public var snapshot: Snapshot
@@ -160,6 +171,7 @@ extension Arguments {
         public init() {}
     }
 
+    /// Arguments for `snapshot-configured`: run snapshotting from a saved config.
     public struct SnapshotConfigured: ParsableArguments, Sendable {
         @OptionGroup(title: Common.optionGroupTitle)
         public var common: Common
@@ -173,6 +185,7 @@ extension Arguments {
 }
 
 extension Arguments {
+    /// Arguments for `sync`: replicate snapshots to a remote host, with optional path remapping.
     public struct Sync: ParsableArguments, Sendable {
         @OptionGroup(title: Common.optionGroupTitle)
         public var common: Common
@@ -208,6 +221,7 @@ extension Arguments {
         public init() {}
     }
 
+    /// Arguments for `sync-configure`: save a `Syncer.Config` to JSON.
     public struct SyncConfigure: ParsableArguments, Sendable {
         @OptionGroup(title: "Sync options")
         public var sync: Sync
@@ -219,6 +233,7 @@ extension Arguments {
         public init() {}
     }
 
+    /// Arguments for `sync-configured`: run a sync from a saved config.
     public struct SyncConfigured: ParsableArguments, Sendable {
         @OptionGroup(title: Common.optionGroupTitle)
         public var common: Common

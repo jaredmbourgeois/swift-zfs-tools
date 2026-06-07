@@ -33,7 +33,7 @@ struct SyncConfigure: ParsableCommand {
         try encode(
         Syncer.Config(arguments: arguments.sync),
             toJSONAtPath: arguments.outputPath,
-            fileManager: .default,
+            fileSystem: .live,
             jsonEncoder: .init()
         )
     }
@@ -46,7 +46,7 @@ struct SyncConfigured: AsyncParsableCommand {
     func run() async throws {
         let config: Syncer.Config = try decodeFromJSONAtPath(
             arguments.configPath,
-            fileManager: .default,
+            fileSystem: .live,
             jsonDecoder: .init()
         )
         let dateFormatter = makeDateFormatter(arguments.common.dateFormat ?? Defaults.dateFormat)

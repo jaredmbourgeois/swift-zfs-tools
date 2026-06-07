@@ -86,14 +86,18 @@ struct SnapshotAndDate: Equatable, Sendable {
 }
 
 extension String {
-    func lines(separator: String) -> [String] {
-        split(separator: separator).map { String($0) }
+    /// POSIX-safe single-quoting for shell arguments: wrap in single quotes and escape any
+    /// embedded single quote as the standard `'\''` (close-quote, literal quote, reopen-quote).
+    /// Keeps dataset names with spaces (legal in ZFS), grep patterns, and ssh args from
+    /// word-splitting, glob-expanding, or injecting when interpolated into a shell command.
+    var shellQuoted: String {
+        "'" + replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }
 
 enum ZFS {
     static func destroy(subject: String) -> String {
-        "zfs destroy \(subject)"
+        "zfs destroy \(subject.shellQuoted)"
     }
 
     private static func list() -> String {
@@ -106,7 +110,7 @@ enum ZFS {
             // `|| true` so an empty grep result (no datasets matching) is reported as zero
             // datasets, not a failure. grep exits 1 on no-match which the shell wrapper
             // would otherwise propagate as a hard error — meaningful for first-time runs.
-            command += " | grep \(grepping) || true"
+            command += " | grep \(grepping.shellQuoted) || true"
         }
         return command
     }
@@ -115,7 +119,7 @@ enum ZFS {
         var command = "\(Self.list()) -t snapshot"
         if let grepping {
             // See note on listDatasets — same rationale (e.g. fresh remote with no snapshots yet).
-            command += " | grep \(grepping) || true"
+            command += " | grep \(grepping.shellQuoted) || true"
         }
         return command
     }
@@ -125,20 +129,38 @@ enum ZFS {
         if recursive {
           command += " -r"
         }
-        command += " \(dataset)\(dateSeparator)\(dateFormatter.string(from: date))"
+        let snapshotName = "\(dataset)\(dateSeparator)\(dateFormatter.string(from: date))"
+        command += " \(snapshotName.shellQuoted)"
         return command
     }
 
     /// Returns pool capacity as integer percentage (0-100).
     /// Output: single integer, e.g. "42"
     static func poolCapacity(pool: String) -> String {
-        "zpool list -Hp -o capacity \(pool)"
+        "zpool list -Hp -o capacity \(pool.shellQuoted)"
     }
 
     /// Returns used and available bytes for a dataset/pool.
     /// Output: tab-separated "used\tavailable", e.g. "1234567890\t9876543210"
     static func listUsedAvailable(dataset: String) -> String {
-        "zfs list -Hp -o used,available \(dataset)"
+        "zfs list -Hp -o used,available \(dataset.shellQuoted)"
+    }
+}
+
+extension ShellAtPath {
+    /// Run `command` and return its stdout split into lines — the shared
+    /// `execute → get → decodeStringLines → stdoutTyped` chain used across every ZFS listing
+    /// and query call site.
+    func lines(
+        _ command: ShellCommand,
+        dryRun: Bool,
+        encoding: String.Encoding,
+        lineSeparator: String
+    ) async throws -> [String] {
+        try await execute(command, dryRun: dryRun)
+            .get()
+            .decodeStringLines(encoding: encoding, lineSeparator: lineSeparator)
+            .stdoutTyped
     }
 }
 

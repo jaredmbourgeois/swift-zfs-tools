@@ -60,7 +60,7 @@ enum Dependency: String {
     var packageVersion: String {
         switch self {
         case .argumentParser: "1.5.0"
-        case .shell: "1.4.1"
+        case .shell: "2.0.0"
         }
     }
 
@@ -100,6 +100,8 @@ enum Product: String {
         }
     }
 
+    static let swiftSettings: [SwiftSetting] = [.swiftLanguageMode(.v6)]
+
     var target: PackageDescription.Target {
         switch self {
         case .command:
@@ -110,7 +112,8 @@ enum Product: String {
                     Dependency.shell.targetDependency,
                     .target(name: Product.model.name),
                 ],
-                path: path
+                path: path,
+                swiftSettings: Self.swiftSettings
             )
         case .model:
             .target(
@@ -119,7 +122,8 @@ enum Product: String {
                     Dependency.argumentParser.targetDependency,
                     Dependency.shell.targetDependency,
                 ],
-                path: path
+                path: path,
+                swiftSettings: Self.swiftSettings
             )
         case .tests:
             .testTarget(
@@ -133,7 +137,8 @@ enum Product: String {
                 path: path,
                 resources: [
                     .copy("resource")
-                ]
+                ],
+                swiftSettings: Self.swiftSettings
             )
         }
     }

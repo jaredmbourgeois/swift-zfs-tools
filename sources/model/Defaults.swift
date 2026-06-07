@@ -7,7 +7,10 @@
 
 import Foundation
 
+/// Compile-time defaults used when a flag or config field is omitted. Edit here and rebuild to change
+/// the tool's out-of-the-box behavior.
 public enum Defaults {
+    /// The default GFS schedule: 7 daily, 3 weekly, 11 monthly, then 1 yearly indefinitely.
     public static func consolidationSchedule(upperBound: String?) -> Consolidator.SnapshotConsolidationSchedule {
         .Builder(upperBound: upperBound)
             .keepingSnapshots(1, every: 1, .days, repeatedBy: 7)
@@ -21,6 +24,8 @@ public enum Defaults {
     public static let lineSeparator = "\n"
     public static let recursive = false
     public static let shellPath = "/bin/bash"
+    // Currently unused; kept for public-API stability. Shell output/failure printing is handled by
+    // the ShellObserver in `ShellAtPath.init(arguments:)` (Common.swift), not these flags.
     public static let shellPrintsStandardOutput = true
     public static let shellPrintsFailure = true
     public static let stringEncoding = String.Encoding.utf8

@@ -5,7 +5,6 @@
 // Licensed under Apache License v2.0 with Runtime Library Exception
 //
 
-import ArgumentParser
 import Foundation
 import XCTest
 
@@ -13,7 +12,7 @@ import XCTest
 
 final class ConsolidatorConfigTest: XCTestCase {
     private lazy var defaultConfig: Consolidator.Config = {
-        Self.config(dateFormatter: dateFormatter, fileManager: fileManager)
+        Self.config(dateFormatter: dateFormatter)
     }()
 
     private let fileManager = FileManager.default
@@ -38,16 +37,15 @@ final class ConsolidatorConfigTest: XCTestCase {
         XCTAssertEqual(Self.defaultConfigEncode, string)
     }
 
-    func testConfigFromJSON() {
+    func testConfigFromJSON() throws {
         let decoder = JSONDecoder()
-        XCTAssertEqual(defaultConfig, decodeResourceJSON(named: "ConsolidatorConfig", fileManager: fileManager, jsonDecoder: decoder))
+        XCTAssertEqual(defaultConfig, try decodeResourceJSON(named: "ConsolidatorConfig", fileManager: fileManager, jsonDecoder: decoder))
         XCTAssertEqual(
             Self.config(
                 date: nil,
-                dateFormatter: dateFormatter,
-                fileManager: fileManager
+                dateFormatter: dateFormatter
             ),
-            decodeResourceJSON(named: "ConsolidatorConfigNoUpperBound", fileManager: fileManager, jsonDecoder: decoder)
+            try decodeResourceJSON(named: "ConsolidatorConfigNoUpperBound", fileManager: fileManager, jsonDecoder: decoder)
         )
     }
 }
@@ -56,8 +54,7 @@ extension ConsolidatorConfigTest {
     static func config(
         consolidationSchedule: Consolidator.SnapshotConsolidationSchedule? = nil,
         date: String? = testDateString,
-        dateFormatter: DateFormatter,
-        fileManager: FileManager
+        dateFormatter: DateFormatter
     ) -> Consolidator.Config {
         .init(
             datasetGrep: "nas_12tb/nas/",

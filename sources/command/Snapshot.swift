@@ -34,7 +34,7 @@ struct SnapshotConfigure: ParsableCommand {
         try encode(
             Snapshotter.Config(arguments: arguments.snapshot),
             toJSONAtPath: arguments.outputPath,
-            fileManager: .default,
+            fileSystem: .live,
             jsonEncoder: .init()
         )
     }
@@ -47,7 +47,7 @@ struct SnapshotConfigured: AsyncParsableCommand {
     func run() async throws {
         let config: Snapshotter.Config = try decodeFromJSONAtPath(
             arguments.configPath,
-            fileManager: .default,
+            fileSystem: .live,
             jsonDecoder: .init()
         )
         let dateFormatter = makeDateFormatter(arguments.common.dateFormat ?? Defaults.dateFormat)

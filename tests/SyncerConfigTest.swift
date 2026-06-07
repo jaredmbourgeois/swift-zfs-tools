@@ -32,7 +32,7 @@ final class SyncerConfigTest: XCTestCase {
     }
 
     func testConfigFromFile() throws {
-        let config: Syncer.Config = decodeResourceJSON(named: "SyncerConfig", fileManager: .default, jsonDecoder: JSONDecoder())
+        let config: Syncer.Config = try decodeResourceJSON(named: "SyncerConfig", fileManager: .default, jsonDecoder: JSONDecoder())
         XCTAssertEqual(Self.defaultConfig, config)
     }
 }
