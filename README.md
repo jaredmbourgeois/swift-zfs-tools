@@ -69,7 +69,7 @@ set -o pipefail; zfs send -v -i 'tank/data@<prev>' 'tank/data@<latest>' \
 
 ## Dry-run by default
 
-`--execute` defaults to `false`. In dry-run, nothing touches ZFS — each command is printed instead of run, so you can inspect exactly what a cron job will do before trusting it. Add `--execute true` to apply. Every run logs each command with its exit status and any stdout/stderr (prefixed `zfs-tools command:`), so real runs are auditable too.
+`--execute` defaults to `false`. In dry-run, nothing touches ZFS — each command is printed instead of run, so you can inspect exactly what a cron job will do before trusting it. Add `--execute true` to apply. Every run logs each command, result, stdout, and stderr with explicit `zfs-tools command:`, `zfs-tools result:`, `zfs-tools stdout:`, and `zfs-tools stderr:` prefixes, so real runs are auditable too.
 
 ## Commands
 

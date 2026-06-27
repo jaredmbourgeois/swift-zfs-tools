@@ -29,14 +29,14 @@ struct BuildCommand: AsyncParsableCommand {
         # If Swift isn't on the remote's PATH, point at it
         zfs-tools-build --remote user@buildhost --swift /path/to/swift
         """,
-        version: "2.0.1"
+        version: "2.0.2"
     )
 
     @OptionGroup
     var arguments: Arguments.Build
 
     func run() async throws {
-        let shell = ShellAtPath.loggingToStdout(label: "zfs-tools-build command")
+        let shell = ShellAtPath.loggingToStdout(toolName: "zfs-tools-build")
         try await Builder(config: .init(arguments: arguments), shell: shell).build()
     }
 }

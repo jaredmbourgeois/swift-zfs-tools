@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Shell
 import XCTest
 
 @testable import ZFSToolsModel
@@ -13,6 +14,18 @@ import XCTest
 // Pins the shell-command construction: every interpolated value is single-quoted so dataset
 // names with spaces (legal in ZFS), grep patterns, and ssh args can't word-split or inject.
 final class ZFSCommandTest: XCTestCase {
+    // MARK: - shell logging
+
+    func testShellLogFormatterLabelsCommandResultStdoutAndStderrSeparately() {
+        let formatter = ShellLogFormatter(toolName: "zfs-tools", lineSeparator: "\n", stringEncoding: .utf8)
+        let result = ShellResult<ShellAtPathError>.success(stderr: "warning\n", stdout: "dataset\n")!
+
+        XCTAssertEqual("zfs-tools command: zfs list -o name -H", formatter.command("zfs list -o name -H"))
+        XCTAssertEqual("zfs-tools result: success (0)", formatter.result(result))
+        XCTAssertEqual("zfs-tools stdout:\ndataset\n", formatter.stdout(result.processOutput.stdout))
+        XCTAssertEqual("zfs-tools stderr:\nwarning\n", formatter.stderr(result.processOutput.stderr))
+    }
+
     // MARK: - shellQuoted
 
     func testShellQuotedWrapsPlainValue() {

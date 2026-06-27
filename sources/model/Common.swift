@@ -52,46 +52,79 @@ extension ShellAtPath {
     }
 
     /// A `ShellAtPath` whose observer prints each command, its exit status, and decoded
-    /// stdout/stderr (prefixed `<label>:`). Shared by the `zfs-tools` CLI and the `zfs-tools-build`
+    /// stdout/stderr (prefixed with distinct `<tool> <event>:` labels). Shared by the `zfs-tools` CLI and the `zfs-tools-build`
     /// builder. Take plain values — never read `@Option`s off a hand-constructed `ParsableArguments`,
     /// which traps.
     public static func loggingToStdout(
-        label: String = "zfs-tools command",
+        toolName: String = "zfs-tools",
         shellPath: String = Defaults.shellPath,
         lineSeparator: String = Defaults.lineSeparator,
         stringEncoding: String.Encoding = Defaults.stringEncoding
     ) -> ShellAtPath {
-        @Sendable func prefix(_ string: String) -> String {
-            "\(label): \(string)"
-        }
+        let formatter = ShellLogFormatter(
+            toolName: toolName,
+            lineSeparator: lineSeparator,
+            stringEncoding: stringEncoding
+        )
         return .atPath(
             shellPath,
             shellObserver: .init(
                 onResult: { command, result in
-                    print(prefix(command))
-                    if let error = result.error {
-                        print(prefix("error (\(result.termination.status)) \(error.userInfo[NSLocalizedDescriptionKey] ?? error.localizedDescription)"))
-                    } else {
-                        print(prefix("success (\(result.termination.status))"))
+                    print(formatter.command(command))
+                    print(formatter.result(result))
+                    if let stdout = formatter.stdout(result.processOutput.stdout) {
+                        print(stdout)
                     }
-                    if let stdoutString = String(data: result.processOutput.stdout, encoding: stringEncoding) {
-                        if !stdoutString.isEmpty {
-                            print(prefix("stdout\(lineSeparator)\(stdoutString)"))
-                        }
-                    } else {
-                        print(prefix("stdout (\(result.processOutput.stdout.count) bytes) could not be decoded as \(String(reflecting: stringEncoding)) (\(stringEncoding.rawValue))"))
-                    }
-                    if let stderrString = String(data: result.processOutput.stderr, encoding: stringEncoding) {
-                        if !stderrString.isEmpty {
-                            print(prefix("stderr\(lineSeparator)\(stderrString)"))
-                        }
-                    } else {
-                        print(prefix("stderr (\(result.processOutput.stderr.count) bytes) could not be decoded as \(String(reflecting: stringEncoding)) (\(stringEncoding.rawValue))"))
+                    if let stderr = formatter.stderr(result.processOutput.stderr) {
+                        print(stderr)
                     }
                 }
             ),
             stringEncoding: stringEncoding
         )
+    }
+}
+
+public struct ShellLogFormatter: Sendable {
+    public let toolName: String
+    public let lineSeparator: String
+    public let stringEncoding: String.Encoding
+
+    public init(
+        toolName: String,
+        lineSeparator: String,
+        stringEncoding: String.Encoding
+    ) {
+        self.toolName = toolName
+        self.lineSeparator = lineSeparator
+        self.stringEncoding = stringEncoding
+    }
+
+    public func command(_ command: ShellCommand) -> String {
+        "\(toolName) command: \(command)"
+    }
+
+    public func result(_ result: ShellResult<ShellAtPathError>) -> String {
+        if let error = result.error {
+            return "\(toolName) result: error (\(result.termination.status)) \(error.userInfo[NSLocalizedDescriptionKey] ?? error.localizedDescription)"
+        }
+        return "\(toolName) result: success (\(result.termination.status))"
+    }
+
+    public func stdout(_ data: Data) -> String? {
+        output(label: "stdout", data: data)
+    }
+
+    public func stderr(_ data: Data) -> String? {
+        output(label: "stderr", data: data)
+    }
+
+    private func output(label: String, data: Data) -> String? {
+        if let string = String(data: data, encoding: stringEncoding) {
+            guard !string.isEmpty else { return nil }
+            return "\(toolName) \(label):\(lineSeparator)\(string)"
+        }
+        return "\(toolName) \(label): (\(data.count) bytes) could not be decoded as \(String(reflecting: stringEncoding)) (\(stringEncoding.rawValue))"
     }
 }
 
