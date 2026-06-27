@@ -34,10 +34,10 @@ public struct Syncer: Sendable {
     /// Replicate every matching dataset: destroy remote-only snapshots, then send each new local
     /// snapshot (incremental where possible). Sends run sequentially — ZFS receive locks the dataset.
     public func sync() async throws {
+        let sendRateLimitPipe = try Self.sendRateLimitPipe(for: config.sendRateLimit)
         let datasets = try await datasets()
         // send and receive sequentially since ZFS receive locks dataset and its descendents
         // https://docs.oracle.com/cd/E18752_01/html/819-5461/gbchx.html
-        var sendCommand: String
         for dataset in datasets {
             for snapshotToDelete in dataset.snapshotsRemoteToDelete {
                 // snapshotToDelete.snapshot is stored in local form; transform to remote for destroy
@@ -47,17 +47,27 @@ public struct Syncer: Sendable {
                 ).get()
             }
             for snapshotToSend in dataset.snapshotsLocalToSend {
-                sendCommand = "zfs send -v"
-                if let previousSnapshot = snapshotToSend.previous {
-                    sendCommand += " -i \(previousSnapshot.snapshot.shellQuoted)"
-                }
-                sendCommand += " \(snapshotToSend.this.snapshot.shellQuoted) | \(sshLogin) zfs recv -F \(forwardPath(snapshotToSend.this.snapshot).shellQuoted)"
                 _ = try await shell.execute(
-                    sendCommand,
+                    sendCommand(for: snapshotToSend, sendRateLimitPipe: sendRateLimitPipe),
                     dryRun: !config.execute
                 ).get()
             }
         }
+    }
+
+    private func sendCommand(for snapshotToSend: SendSnapshot, sendRateLimitPipe: String?) -> String {
+        var zfsSend = "zfs send -v"
+        if let previousSnapshot = snapshotToSend.previous {
+            zfsSend += " -i \(previousSnapshot.snapshot.shellQuoted)"
+        }
+        zfsSend += " \(snapshotToSend.this.snapshot.shellQuoted)"
+
+        var command = "set -o pipefail; \(zfsSend)"
+        if let sendRateLimitPipe {
+            command += " | \(sendRateLimitPipe)"
+        }
+        command += " | \(sshLogin) zfs recv -F \(forwardPath(snapshotToSend.this.snapshot).shellQuoted)"
+        return command
     }
 
     private func datasets() async throws -> [DatasetSnapshotOperation] {
@@ -203,6 +213,34 @@ public struct Syncer: Sendable {
         }
         return path
     }
+
+    private static func sendRateLimitPipe(for sendRateLimit: String?) throws -> String? {
+        guard let sendRateLimit, !sendRateLimit.isEmpty else { return nil }
+        guard isValidSendRateLimit(sendRateLimit) else {
+            throw ErrorType.invalidArgument(
+                name: "sendRateLimit",
+                value: sendRateLimit,
+                reason: "expected a positive byte count with an optional K/M/G/T/P/E/Z/Y suffix, e.g. 20M"
+            )
+        }
+        return "pv -q -L \(sendRateLimit.shellQuoted)"
+    }
+
+    private static func isValidSendRateLimit(_ sendRateLimit: String) -> Bool {
+        guard let firstCharacter = sendRateLimit.first, firstCharacter != "0" else { return false }
+        let suffixes = Set("kKmMgGtTpPeEzZyY")
+        let lastCharacter = sendRateLimit.last
+        let digitString: Substring
+        if let lastCharacter, suffixes.contains(lastCharacter) {
+            digitString = sendRateLimit.dropLast()
+        } else {
+            digitString = sendRateLimit[...]
+        }
+        guard !digitString.isEmpty else { return false }
+        return digitString.utf8.allSatisfy { scalar in
+            scalar >= 48 && scalar <= 57
+        }
+    }
 }
 
 extension Syncer {
@@ -219,6 +257,8 @@ extension Syncer {
         let sshUser: String
         let sshIP: String
         let stringEncodingRawValue: UInt
+        /// Optional `pv -q -L` rate passed into the local send pipeline, e.g. "20M".
+        let sendRateLimit: String?
         /// Strip this prefix from local dataset paths before computing the remote path.
         /// Combine with `remotePathRoot` to redirect snapshots to a different location on the
         /// destination. Both nil = behavior identical to 1.2.0 (recv path matches send path).
@@ -237,6 +277,7 @@ extension Syncer {
             sshUser: String,
             sshIP: String,
             stringEncoding: String.Encoding,
+            sendRateLimit: String? = nil,
             remotePathStrip: String? = nil,
             remotePathRoot: String? = nil
         ) {
@@ -249,6 +290,7 @@ extension Syncer {
             self.sshUser = sshUser
             self.sshIP = sshIP
             self.stringEncodingRawValue = stringEncoding.rawValue
+            self.sendRateLimit = sendRateLimit
             self.remotePathStrip = remotePathStrip
             self.remotePathRoot = remotePathRoot
         }
@@ -265,6 +307,7 @@ extension Syncer {
             sshUser = arguments.sshUser
             sshIP = arguments.sshIP
             stringEncodingRawValue = arguments.common.stringEncodingRawValue ?? Defaults.stringEncoding.rawValue
+            sendRateLimit = arguments.sendRateLimit
             remotePathStrip = arguments.remotePathStrip
             remotePathRoot = arguments.remotePathRoot
         }

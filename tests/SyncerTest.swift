@@ -74,10 +74,10 @@ final class SyncerTest: XCTestCase {
             case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents-alt@20220803-000000'":
                 expectDeleteAlt20220803.fulfill()
                 return .success()
-            case "zfs send -v -i 'nas_12tb/nas/documents@20220803-000000' 'nas_12tb/nas/documents@20220805-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220805-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220803-000000' 'nas_12tb/nas/documents@20220805-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220805-000000'":
                 expectSend20220805.fulfill()
                 return .success()
-            case "zfs send -v -i 'nas_12tb/nas/documents-alt@20220801-000000' 'nas_12tb/nas/documents-alt@20220805-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents-alt@20220805-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents-alt@20220801-000000' 'nas_12tb/nas/documents-alt@20220805-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents-alt@20220805-000000'":
                 expectSendAlt20220805.fulfill()
                 return .success()
             default:
@@ -146,10 +146,10 @@ final class SyncerTest: XCTestCase {
                         nas_12tb/nas/documents@20220801-000000
                         """
                 )!
-            case "zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
                 expectSend20220806.fulfill()
                 return .success()
-            case "zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220807-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220807-000000'":
                 expectSend20220807.fulfill()
                 return .success()
             default:
@@ -226,10 +226,10 @@ final class SyncerTest: XCTestCase {
             case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents@20220802-000000'":
                 expectDelete20220802.fulfill()
                 return .success()
-            case "zfs send -v -i 'nas_12tb/nas/documents@20220803-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220803-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
                 expectSend20220806.fulfill()
                 return .success()
-            case "zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220807-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220807-000000'":
                 expectSend20220807.fulfill()
                 return .success()
             default:
@@ -258,7 +258,7 @@ final class SyncerTest: XCTestCase {
     // MARK: - Remote path remapping (1.2.1)
 
     /// Regression guard: with neither remotePathStrip nor remotePathRoot set, sync emits
-    /// byte-identical commands to 1.2.0. Mirror of testSyncOnlyFutureAreSent reduced to one send.
+    /// the same receive path. Mirror of testSyncOnlyFutureAreSent reduced to one send.
     func testSyncWithoutRemotePath_Unchanged() async throws {
         let config = SyncerConfigTest.syncConfig(execute: true)
         let expectSend20220806 = expectation(description: "send 20220806 with unchanged path")
@@ -283,7 +283,7 @@ final class SyncerTest: XCTestCase {
                 )!
             case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(stdout: "nas_12tb/nas/documents@20220805-000000")!
-            case "zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
                 expectSend20220806.fulfill()
                 return .success()
             default:
@@ -294,6 +294,67 @@ final class SyncerTest: XCTestCase {
         let syncer = Syncer(config: config, dateFormatter: dateFormatter, shell: shell)
         try await syncer.sync()
         await fulfillment(of: [expectSend20220806], timeout: 1, enforceOrder: false)
+    }
+
+    func testSyncWithSendRateLimitAddsPvStage() async throws {
+        let config = SyncerConfigTest.syncConfig(execute: true, sendRateLimit: "20M")
+        let expectThrottledSend = expectation(description: "send command includes pv rate limit")
+        let shell = ShellAtPath { @Sendable (
+            _ command: ShellCommand,
+            _ dryRun: Bool,
+            _ estimatedOutputSize: Int?,
+            _ estimatedErrorSize: Int?,
+            _ statusesForResult: ShellTermination.StatusesForResult,
+            _ stream: ShellStream?,
+            _ timeout: TimeInterval?
+        ) async -> ShellResult in
+            switch command {
+            case "zfs list -o name -H | grep 'nas_12tb/nas' || true":
+                return .success(stdout: "nas_12tb/nas/documents")!
+            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
+                return .success(
+                    stdout: """
+                        nas_12tb/nas/documents@20220806-000000
+                        nas_12tb/nas/documents@20220805-000000
+                        """
+                )!
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
+                return .success(stdout: "nas_12tb/nas/documents@20220805-000000")!
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | pv -q -L '20M' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
+                expectThrottledSend.fulfill()
+                return .success()
+            default:
+                XCTFail("unexpected command: \(command)")
+                return .success()
+            }
+        }
+        let syncer = Syncer(config: config, dateFormatter: dateFormatter, shell: shell)
+        try await syncer.sync()
+        await fulfillment(of: [expectThrottledSend], timeout: 1, enforceOrder: false)
+    }
+
+    func testSyncWithInvalidSendRateLimitFailsBeforeShellExecution() async throws {
+        let config = SyncerConfigTest.syncConfig(execute: true, sendRateLimit: "20M; rm -rf /")
+        let shell = ShellAtPath { @Sendable (
+            _ command: ShellCommand,
+            _ dryRun: Bool,
+            _ estimatedOutputSize: Int?,
+            _ estimatedErrorSize: Int?,
+            _ statusesForResult: ShellTermination.StatusesForResult,
+            _ stream: ShellStream?,
+            _ timeout: TimeInterval?
+        ) async -> ShellResult in
+            XCTFail("invalid rate should fail before shell execution: \(command)")
+            return .success()
+        }
+        let syncer = Syncer(config: config, dateFormatter: dateFormatter, shell: shell)
+        do {
+            try await syncer.sync()
+            XCTFail("invalid sendRateLimit should throw")
+        } catch ErrorType.invalidArgument(let name, let value, _, _) {
+            XCTAssertEqual(name, "sendRateLimit")
+            XCTAssertEqual(value, "20M; rm -rf /")
+        }
     }
 
     /// `--remote-path-root pool_b/backups` redirects recv into pool_b/backups/<source-path>.
@@ -327,7 +388,7 @@ final class SyncerTest: XCTestCase {
                 )!
             case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'pool_b/backups/nas_12tb/nas' || true":
                 return .success(stdout: "pool_b/backups/nas_12tb/nas/documents@20220805-000000")!
-            case "zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'pool_b/backups/nas_12tb/nas/documents@20220806-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'pool_b/backups/nas_12tb/nas/documents@20220806-000000'":
                 expectSend20220806.fulfill()
                 return .success()
             default:
@@ -372,7 +433,7 @@ final class SyncerTest: XCTestCase {
                 )!
             case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'nas_12tb/nas' || true":
                 return .success(stdout: "nas_12tb/nas/documents@20220805-000000")!
-            case "zfs send -v -i 'pool_b/backups/nas_12tb/nas/documents@20220805-000000' 'pool_b/backups/nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
+            case "set -o pipefail; zfs send -v -i 'pool_b/backups/nas_12tb/nas/documents@20220805-000000' 'pool_b/backups/nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
                 expectSend20220806.fulfill()
                 return .success()
             default:
@@ -416,7 +477,7 @@ final class SyncerTest: XCTestCase {
                 )!
             case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -o name -H -t snapshot | grep 'backup_pool/source-pool' || true":
                 return .success(stdout: "backup_pool/source-pool/data@20220805-000000")!
-            case "zfs send -v -i 'nas_pool/archive/source-pool/data@20220805-000000' 'nas_pool/archive/source-pool/data@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'backup_pool/source-pool/data@20220806-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_pool/archive/source-pool/data@20220805-000000' 'nas_pool/archive/source-pool/data@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'backup_pool/source-pool/data@20220806-000000'":
                 expectSend20220806.fulfill()
                 return .success()
             default:
@@ -466,7 +527,7 @@ final class SyncerTest: XCTestCase {
                         pool_b/backups/nas_12tb/nas/documents@20220803-000000
                         """
                 )!
-            case "zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'pool_b/backups/nas_12tb/nas/documents@20220807-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'pool_b/backups/nas_12tb/nas/documents@20220807-000000'":
                 expectSend20220807.fulfill()
                 return .success()
             default:
@@ -571,10 +632,10 @@ final class SyncerTest: XCTestCase {
             case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents@20220805-000000'":
                 expectDelete20220805.fulfill()
                 return .success()
-            case "zfs send -v 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
+            case "set -o pipefail; zfs send -v 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
                 expectSend20220806.fulfill()
                 return .success()
-            case "zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220807-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220807-000000'":
                 expectSend20220807.fulfill()
                 return .success()
             default:

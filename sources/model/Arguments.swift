@@ -211,6 +211,10 @@ extension Arguments {
         public var remotePathRoot: String?
         public static let remotePathRootHelp = "Prepend this root to the (possibly stripped) dataset path on the destination. E.g. --remote-path-root pool_b/backups makes 'pool_a/data' arrive as 'pool_b/backups/pool_a/data' on the remote. Defaults to no prepend (recv path matches send path)."
 
+        @Option(help: "\(Self.sendRateLimitHelp)")
+        public var sendRateLimit: String?
+        public static let sendRateLimitHelp = "Limit zfs send throughput with pv -q -L. Example: 20M. Defaults to no rate limit."
+
         public init() {}
     }
 

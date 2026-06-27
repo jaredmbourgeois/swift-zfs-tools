@@ -31,6 +31,17 @@ final class SyncerConfigTest: XCTestCase {
         XCTAssertEqual(Self.defaultConfigEncode, string)
     }
 
+    func testConfigCodableWithSendRateLimit() throws {
+        let config = Self.syncConfig(sendRateLimit: "20M")
+        let jsonEncoder = JSONEncoder()
+        jsonEncoder.outputFormatting = .sortedKeys
+        let data = try jsonEncoder.encode(config)
+        let decoded = try JSONDecoder().decode(Syncer.Config.self, from: data)
+
+        XCTAssertEqual(config, decoded)
+        XCTAssertTrue(try XCTUnwrap(String(data: data, encoding: .utf8)).contains("\"sendRateLimit\":\"20M\""))
+    }
+
     func testConfigFromFile() throws {
         let config: Syncer.Config = try decodeResourceJSON(named: "SyncerConfig", fileManager: .default, jsonDecoder: JSONDecoder())
         XCTAssertEqual(Self.defaultConfig, config)
@@ -55,6 +66,7 @@ extension SyncerConfigTest {
         sshUser: String = sshUser,
         sshIP: String = sshIP,
         stringEncoding: String.Encoding = Defaults.stringEncoding,
+        sendRateLimit: String? = nil,
         remotePathStrip: String? = nil,
         remotePathRoot: String? = nil
     ) -> Syncer.Config {
@@ -68,6 +80,7 @@ extension SyncerConfigTest {
             sshUser: sshUser,
             sshIP: sshIP,
             stringEncoding: stringEncoding,
+            sendRateLimit: sendRateLimit,
             remotePathStrip: remotePathStrip,
             remotePathRoot: remotePathRoot
         )

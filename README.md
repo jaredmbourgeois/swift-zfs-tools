@@ -53,6 +53,7 @@ zfs-tools consolidate --dataset-grep tank/data --execute true
 zfs-tools sync --dataset-grep tank/data \
   --ssh-user backup --ssh-ip backup.server.com \
   --ssh-port 22 --ssh-key-path ~/.ssh/backup_key \
+  --send-rate-limit 20M \
   --execute true
 ```
 
@@ -61,7 +62,8 @@ Every command discovers datasets with `zfs list -o name -H | grep <pattern>`, th
 ```bash
 zfs snapshot -r 'tank/data@20250607-120000'
 zfs destroy 'tank/data@20250101-000000'
-zfs send -v -i 'tank/data@<prev>' 'tank/data@<latest>' \
+set -o pipefail; zfs send -v -i 'tank/data@<prev>' 'tank/data@<latest>' \
+  | pv -q -L '20M' \
   | ssh -p '22' -i '~/.ssh/backup_key' 'backup'@'backup.server.com' zfs recv -F 'tank/data@<latest>'
 ```
 
@@ -113,6 +115,7 @@ Replicates snapshots to a remote host via `zfs send | ssh zfs recv` — incremen
 | `--ssh-user` / `--ssh-ip` / `--ssh-port` / `--ssh-key-path` | Remote connection |
 | `--remote-path-strip` | Strip this prefix from each dataset path before sending |
 | `--remote-path-root` | Prepend this root to the (stripped) path on the remote |
+| `--send-rate-limit` | Optional local `pv -q -L` throughput limit for each `zfs send` pipeline |
 
 ### execute-actions
 
@@ -190,6 +193,8 @@ zfs-tools sync --dataset-grep tank/data \
 
 With neither flag set, the receive path matches the send path. Both are optional; the remote dataset listing is filtered with the remapped pattern so incremental-base detection works against the destination's real names.
 
+Add `--send-rate-limit <rate>` to throttle each local `zfs send` stream through `pv -q -L`. The value must be a positive byte count with an optional `K`/`M`/`G`/`T`/`P`/`E`/`Z`/`Y` suffix, such as `20M`; omit the option for no limit. Real runs require `pv` on the sending host when this option is set. Send pipelines start with `set -o pipefail`, so a failure in `zfs send`, `pv`, or `ssh zfs recv` fails the whole command instead of reporting success from the last pipeline stage only.
+
 ## Configuration reference
 
 `<command>-configure` writes one of these; `<command>-configured` reads it. JSON is the schema — field names match the `Config` types in `ZFSToolsModel`. `stringEncodingRawValue: 4` is UTF-8. Live examples: [`tests/resource/`](tests/resource/).
@@ -201,9 +206,10 @@ With neither flag set, the receive path matches the send path. Both are optional
 ```
 
 ```json
-// sync — remotePathStrip / remotePathRoot are optional
+// sync — remotePathStrip / remotePathRoot / sendRateLimit are optional
 { "datasetGrep": "tank/data", "execute": false,
   "sshUser": "backup", "sshIP": "backup.server.com", "sshPort": "22", "sshKeyPath": "~/.ssh/backup_key",
+  "sendRateLimit": "20M",
   "dateSeparator": "@", "lineSeparator": "\n", "stringEncodingRawValue": 4 }
 ```
 
@@ -231,6 +237,7 @@ A consolidate config wraps the [schedule](#retention) shown above plus `datasetG
 
 - Read-only listings (datasets, snapshots, pool stats) and per-dataset `zfs snapshot` run **in parallel**; `destroy` and `send`/`recv` run **sequentially** (ZFS receive locks the dataset).
 - Every interpolated value is **single-quoted** for the shell (embedded quotes escaped `'\''`), so dataset names with spaces and grep patterns can't word-split or inject.
+- Optional send throttling uses the sender's `pv -q -L` in the local pipeline; `set -o pipefail` makes any send/throttle/receive stage fail the command.
 - Saved configs are written **atomically** (temp file + rename) — an interrupted write can't corrupt a config.
 - Built for **complete Swift 6 strict concurrency**; shell execution and file I/O are injected as `@Sendable` witnesses, which is what makes the core unit-testable without a live pool.
 

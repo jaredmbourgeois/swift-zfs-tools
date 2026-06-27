@@ -34,6 +34,12 @@ public enum ErrorType: Error, CustomDebugStringConvertible {
         .jsonDecodeFailed(type: String(reflecting: type), error: error, path: path, location: location(file: file, function: function, line: line))
     }
 
+    /// A CLI/config argument was present but not in the format the tool accepts.
+    case invalidArgument(name: String, value: String, reason: String, location: String)
+    public static func invalidArgument(name: String, value: String, reason: String, file: String = #file, function: String = #function, line: Int = #line) -> Self {
+        .invalidArgument(name: name, value: value, reason: reason, location: location(file: file, function: function, line: line))
+    }
+
     /// A value of `type` couldn't be encoded to JSON for `path`.
     case jsonEncodeFailed(type: String, error: any Error, path: String, location: String)
     public static func jsonEncodeFailed<T>(type: T.Type, error: any Error, path: String, file: String = #file, function: String = #function, line: Int = #line) -> Self {
@@ -66,6 +72,7 @@ public enum ErrorType: Error, CustomDebugStringConvertible {
     case .dateFromCalendar(let date, let location): "Date (\(date)) from calendar operation failed from \(location)."
     case .dateFromString(let string, let format, let location): "Date formatted as \(format) could not be parsed from \(string), from \(location)."
     case .fileNotFound(let path, let location): "File not found at \(path), from \(location)."
+    case .invalidArgument(let name, let value, let reason, let location): "Invalid argument \(name)=\(value): \(reason), from \(location)."
     case .jsonDecodeFailed(let type, let error, let path, let location): "Could not DEcode \(type) at \(path), from \(location); \(String(reflecting: error))"
     case .jsonEncodeFailed(let type, let error, let path, let location): "Could not ENcode \(type) to \(path), from \(location); \(String(reflecting: error))"
     case .shellError(let command, let error, let location): "Shell command (\(command)), returned error (\(error)), from \(location)"
