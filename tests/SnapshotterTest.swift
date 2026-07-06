@@ -28,11 +28,7 @@ final class SnapshotterTest: XCTestCase {
             "nas_12tb/nas/media",
         ]
         let snapshotNasCommand = "zfs snapshot -r '\(datasets[0])\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))'"
-        let snapshotNasDocumentsCommand = "zfs snapshot -r '\(datasets[1])\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))'"
-        let snapshotNasMediaCommand = "zfs snapshot -r '\(datasets[2])\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))'"
         let expectSnapshotNas = expectation(description: "expect snapshot \(datasets[0])")
-        let expectSnapshotNasDocuments = expectation(description: "expect snapshot \(datasets[1])")
-        let expectSnapshotNasMedia = expectation(description: "expect snapshot \(datasets[2])")
         let shell = ShellAtPath {
             @Sendable (
                 _ command: ShellCommand,
@@ -51,12 +47,6 @@ final class SnapshotterTest: XCTestCase {
             case snapshotNasCommand:
                 expectSnapshotNas.fulfill()
                 return .success()
-            case snapshotNasDocumentsCommand:
-                expectSnapshotNasDocuments.fulfill()
-                return .success()
-            case snapshotNasMediaCommand:
-                expectSnapshotNasMedia.fulfill()
-                return .success()
             default:
                 XCTFail("unexpected command: \(command)")
                 return .success()
@@ -72,10 +62,100 @@ final class SnapshotterTest: XCTestCase {
         await fulfillment(
             of: [
                 expectSnapshotNas,
-                expectSnapshotNasDocuments,
-                expectSnapshotNasMedia,
             ],
             timeout: timeout
         )
+    }
+
+    func testExcludedDatasetsAreNotSnapshotted() async throws {
+        let config = SnapshotterConfigTest.snapshotConfig(
+            recursive: true,
+            excludedDatasetGreps: ["received"],
+            execute: true
+        )
+        let includedDataset = "nas_12tb/nas/documents"
+        let excludedDataset = "nas_12tb/nas/received/postgres"
+        let snapshotIncludedCommand = "zfs snapshot '\(includedDataset)\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))'"
+        let expectSnapshotIncluded = expectation(description: "expect snapshot included dataset")
+        let shell = ShellAtPath {
+            @Sendable (
+                _ command: ShellCommand,
+                _ dryRun: Bool,
+                _ estimatedOutputSize: Int?,
+                _ estimatedErrorSize: Int?,
+                _ statusesForResult: ShellTermination.StatusesForResult,
+                _ stream: ShellStream?,
+                _ timeout: TimeInterval?
+            ) async -> ShellResult in
+            switch command {
+            case "zfs list -o name -H | grep '\(SnapshotterConfigTest.defaultDataset)' || true":
+                return .success(stdout: [includedDataset, excludedDataset].joined(separator: Defaults.lineSeparator))!
+            case snapshotIncludedCommand:
+                expectSnapshotIncluded.fulfill()
+                return .success()
+            default:
+                XCTFail("unexpected command: \(command)")
+                return .success()
+            }
+        }
+        let snapshotter = Snapshotter(
+            config: config,
+            date: { [snapshotDate] in snapshotDate },
+            dateFormatter: dateFormatter,
+            shell: shell
+        )
+        try await snapshotter.snapshot()
+        await fulfillment(of: [expectSnapshotIncluded], timeout: timeout)
+    }
+
+    func testRecursiveExclusionSnapshotsFilteredDatasetsNonrecursively() async throws {
+        let config = SnapshotterConfigTest.snapshotConfig(
+            recursive: true,
+            excludedDatasetGreps: ["received"],
+            execute: true
+        )
+        let includedParent = "nas_12tb/nas"
+        let includedChild = "nas_12tb/nas/documents"
+        let excludedChild = "nas_12tb/nas/received/postgres"
+        let snapshotParentCommand = "zfs snapshot '\(includedParent)\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))'"
+        let snapshotChildCommand = "zfs snapshot '\(includedChild)\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))'"
+        let expectSnapshotParent = expectation(description: "expect snapshot parent without -r")
+        let expectSnapshotChild = expectation(description: "expect snapshot child without -r")
+        let shell = ShellAtPath {
+            @Sendable (
+                _ command: ShellCommand,
+                _ dryRun: Bool,
+                _ estimatedOutputSize: Int?,
+                _ estimatedErrorSize: Int?,
+                _ statusesForResult: ShellTermination.StatusesForResult,
+                _ stream: ShellStream?,
+                _ timeout: TimeInterval?
+            ) async -> ShellResult in
+            switch command {
+            case "zfs list -o name -H | grep '\(SnapshotterConfigTest.defaultDataset)' || true":
+                return .success(stdout: [includedParent, includedChild, excludedChild].joined(separator: Defaults.lineSeparator))!
+            case snapshotParentCommand:
+                expectSnapshotParent.fulfill()
+                return .success()
+            case snapshotChildCommand:
+                expectSnapshotChild.fulfill()
+                return .success()
+            default:
+                if command.contains(" -r ") || command.contains(excludedChild) {
+                    XCTFail("exclusions must not use recursive snapshotting or snapshot excluded child: \(command)")
+                } else {
+                    XCTFail("unexpected command: \(command)")
+                }
+                return .success()
+            }
+        }
+        let snapshotter = Snapshotter(
+            config: config,
+            date: { [snapshotDate] in snapshotDate },
+            dateFormatter: dateFormatter,
+            shell: shell
+        )
+        try await snapshotter.snapshot()
+        await fulfillment(of: [expectSnapshotParent, expectSnapshotChild], timeout: timeout)
     }
 }

@@ -78,6 +78,34 @@ final class ZFSCommandTest: XCTestCase {
         XCTAssertEqual("zfs list -o name -H -t snapshot | grep 'tank/data' || true", ZFS.listSnapshots(grepping: "tank/data"))
     }
 
+    func testListSnapshotRecordsNoGrep() {
+        XCTAssertEqual(
+            "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg",
+            ZFS.listSnapshotRecords()
+        )
+    }
+
+    func testListSnapshotRecordsQuotesGrep() {
+        XCTAssertEqual(
+            "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'tank/data' || true",
+            ZFS.listSnapshotRecords(grepping: "tank/data")
+        )
+    }
+
+    func testListBookmarkRecordsQuotesGrep() {
+        XCTAssertEqual(
+            "zfs list -t bookmark -H -p -o guid,createtxg,name -s createtxg | grep '#sent-backup' || true",
+            ZFS.listBookmarkRecords(grepping: "#sent-backup")
+        )
+    }
+
+    func testBookmarkQuotesSnapshotAndBookmark() {
+        XCTAssertEqual(
+            "zfs bookmark 'tank/data@s1' 'tank/data#sent-backup'",
+            ZFS.bookmark(snapshot: "tank/data@s1", bookmark: "tank/data#sent-backup")
+        )
+    }
+
     // MARK: - snapshot
 
     func testSnapshotQuotesName() {

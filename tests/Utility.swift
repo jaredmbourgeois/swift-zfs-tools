@@ -31,6 +31,28 @@ let dateFormatter = makeDateFormatter(dateFormat)
 let testDate = dateFormatter.date(from: testDateString)!
 let testDateString = "20220806-000000"
 let timeout = TimeInterval(1)
+let snapshotRecordListCommand = "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg"
+
+func snapshotRecord(_ guid: String, _ createtxg: UInt64, _ name: String) -> String {
+    "\(guid)\t\(createtxg)\t\(name)"
+}
+
+func snapshotRecordOutput(_ names: [String]) -> String {
+    names.map { name in
+        snapshotRecord(snapshotGuid(name), snapshotCreatetxg(name), name)
+    }
+    .joined(separator: "\n")
+}
+
+func snapshotGuid(_ name: String) -> String {
+    "guid-\(name)"
+}
+
+func snapshotCreatetxg(_ name: String) -> UInt64 {
+    guard let suffix = name.split(separator: "@", maxSplits: 1).last else { return 0 }
+    let digits = suffix.filter { $0 >= "0" && $0 <= "9" }
+    return UInt64(String(digits)) ?? 0
+}
 
 /// Dictionary-backed store behind a test `FileSystem` — exercises the Codable / ActionExecutor
 /// read+write paths without touching disk. Backed by swift-shell's `Locked`, so it's `Sendable` for

@@ -45,6 +45,7 @@ extension SnapshotterConfigTest {
         datasetGrep: String = defaultDataset,
         recursive: Bool = true,
         dateSeparator: String = Defaults.dateSeparator,
+        excludedDatasetGreps: [String] = [],
         lineSeparator: String = Defaults.lineSeparator,
         execute: Bool = Defaults.execute,
         stringEncodingRawValue: String.Encoding.RawValue = Defaults.stringEncoding.rawValue
@@ -53,13 +54,14 @@ extension SnapshotterConfigTest {
             datasetGrep: datasetGrep,
             dateSeparator: dateSeparator,
             execute: execute,
+            excludedDatasetGreps: excludedDatasetGreps,
             lineSeparator: lineSeparator,
             recursive: recursive,
             stringEncodingRawValue: stringEncodingRawValue
         )
     }
 
-    static let defaultConfigEncode = "{\"datasetGrep\":\"nas_12tb\\/nas\",\"dateSeparator\":\"@\",\"execute\":false,\"lineSeparator\":\"\\n\",\"recursive\":true,\"stringEncodingRawValue\":4}"
+    static let defaultConfigEncode = "{\"datasetGrep\":\"nas_12tb\\/nas\",\"dateSeparator\":\"@\",\"excludedDatasetGreps\":[],\"execute\":false,\"lineSeparator\":\"\\n\",\"recursive\":true,\"stringEncodingRawValue\":4}"
 
     static let defaultConfigDecode = """
     {

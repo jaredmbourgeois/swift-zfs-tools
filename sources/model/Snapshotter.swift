@@ -51,12 +51,18 @@ public struct Snapshotter: Sendable {
                 return
             }
         }
-        let datasets = try await shell.lines(
+        let datasetsListed = try await shell.lines(
             ZFS.listDatasets(grepping: config.datasetGrep),
             dryRun: !config.execute,
             encoding: .init(rawValue: config.stringEncodingRawValue),
             lineSeparator: config.lineSeparator
         )
+        .filter { dataset in
+            !config.excludedDatasetGreps.contains { excluded in
+                !excluded.isEmpty && dataset.contains(excluded)
+            }
+        }
+        let datasets = Self.snapshotDatasets(from: datasetsListed, recursive: config.recursive, hasExclusions: !config.excludedDatasetGreps.isEmpty)
         // Per-dataset `zfs snapshot` calls in parallel. Each is independent at the
         // ZFS layer — distinct datasets share the pool's TXG batch but the kernel
         // serializes metadata commits transparently, so parallelism is safe and
@@ -73,13 +79,22 @@ public struct Snapshotter: Sendable {
                             date: date(),
                             dateFormatter: dateFormatter,
                             dateSeparator: config.dateSeparator,
-                            recursive: config.recursive
+                            recursive: config.recursive && config.excludedDatasetGreps.isEmpty
                         ),
                         dryRun: !config.execute
                     )
                     .get()
                     return
                 }
+            }
+        }
+    }
+
+    private static func snapshotDatasets(from datasets: [String], recursive: Bool, hasExclusions: Bool) -> [String] {
+        guard recursive, !hasExclusions else { return datasets }
+        return datasets.filter { dataset in
+            !datasets.contains { possibleParent in
+                possibleParent != dataset && dataset.hasPrefix(possibleParent + "/")
             }
         }
     }
@@ -94,6 +109,9 @@ extension Snapshotter {
         public let dateSeparator: String
         /// When `false` (the default), commands are printed but not run.
         public let execute: Bool
+        /// Skip matching datasets after the broad listing. Used to avoid local snapshots on received
+        /// trees that are only being forwarded onward.
+        public let excludedDatasetGreps: [String]
         public let lineSeparator: String
         /// Skip snapshotting if pool capacity exceeds this percent (0–100); `nil` disables the guard.
         public let maxPoolUtilizationPercent: Float?
@@ -108,6 +126,7 @@ extension Snapshotter {
             datasetGrep: String?,
             dateSeparator: String,
             execute: Bool,
+            excludedDatasetGreps: [String] = [],
             lineSeparator: String,
             maxPoolUtilizationPercent: Float? = nil,
             minFreeBytes: Int64? = nil,
@@ -117,6 +136,7 @@ extension Snapshotter {
             self.datasetGrep = datasetGrep
             self.dateSeparator = dateSeparator
             self.execute = execute
+            self.excludedDatasetGreps = excludedDatasetGreps
             self.lineSeparator = lineSeparator
             self.maxPoolUtilizationPercent = maxPoolUtilizationPercent
             self.minFreeBytes = minFreeBytes
@@ -130,6 +150,7 @@ extension Snapshotter {
             datasetGrep = arguments.datasetGrep
             dateSeparator = arguments.common.dateSeparator ?? Defaults.dateSeparator
             execute = arguments.common.execute ?? Defaults.execute
+            excludedDatasetGreps = arguments.excludedDatasetGreps
             lineSeparator = arguments.common.lineSeparator ?? Defaults.lineSeparator
             maxPoolUtilizationPercent = arguments.maxPoolUtilization
             minFreeBytes = arguments.minFreeBytes
@@ -138,7 +159,7 @@ extension Snapshotter {
         }
 
         enum CodingKeys: String, CodingKey {
-            case datasetGrep, dateSeparator, execute, lineSeparator
+            case datasetGrep, dateSeparator, execute, excludedDatasetGreps, lineSeparator
             case maxPoolUtilizationPercent, minFreeBytes
             case recursive, stringEncodingRawValue
         }
@@ -148,6 +169,7 @@ extension Snapshotter {
             datasetGrep = try container.decodeIfPresent(String.self, forKey: .datasetGrep)
             dateSeparator = try container.decode(String.self, forKey: .dateSeparator)
             execute = try container.decode(Bool.self, forKey: .execute)
+            excludedDatasetGreps = try container.decodeIfPresent([String].self, forKey: .excludedDatasetGreps) ?? []
             lineSeparator = try container.decode(String.self, forKey: .lineSeparator)
             maxPoolUtilizationPercent = try container.decodeIfPresent(Float.self, forKey: .maxPoolUtilizationPercent)
             minFreeBytes = try container.decodeIfPresent(Int64.self, forKey: .minFreeBytes)

@@ -20,27 +20,33 @@ extension Arguments {
 
         @Option(help: "\(Self.dateFormatHelp)")
         public var dateFormat: String?
-        public static let dateFormatHelp = "The ZFS snapshot date format. Defaults to \(Defaults.dateFormat)"
+        public static let dateFormatHelp =
+            "The ZFS snapshot date format. Defaults to \(Defaults.dateFormat)"
 
         @Option(help: "\(Self.dateSeparatorHelp)")
         public var dateSeparator: String?
-        public static let dateSeparatorHelp = "The ZFS snapshot date separator. Defaults to \(Defaults.dateSeparator)."
+        public static let dateSeparatorHelp =
+            "The ZFS snapshot date separator. Defaults to \(Defaults.dateSeparator)."
 
         @Option(help: "\(Self.executeHelp)")
         public var execute: Bool?
-        public static let executeHelp = "Whether or not the commands will be executed. Commands will only be printed if not. Defaults to \(Defaults.execute)."
+        public static let executeHelp =
+            "Whether or not the commands will be executed. Commands will only be printed if not. Defaults to \(Defaults.execute)."
 
         @Option(help: "\(Self.lineSeparatorHelp)")
         public var lineSeparator: String?
-        public static let lineSeparatorHelp = "Line separator. Defaults to '\(Defaults.lineSeparator)'."
+        public static let lineSeparatorHelp =
+            "Line separator. Defaults to '\(Defaults.lineSeparator)'."
 
         @Option(help: "\(Self.shellPathHelp)")
         public var shellPath: String?
-        public static let shellPathHelp = "Path to the shell used for execution. Defaults to \(Defaults.shellPath)."
+        public static let shellPathHelp =
+            "Path to the shell used for execution. Defaults to \(Defaults.shellPath)."
 
         @Option(help: "\(Self.stringEncodingRawValueHelp)")
         public var stringEncodingRawValue: String.Encoding.RawValue?
-        public static let stringEncodingRawValueHelp = "String encoding rawValue. Defaults to \(Defaults.stringEncoding.rawValue) (\(Defaults.stringEncoding))."
+        public static let stringEncodingRawValueHelp =
+            "String encoding rawValue. Defaults to \(Defaults.stringEncoding.rawValue) (\(Defaults.stringEncoding))."
 
         public init() {}
     }
@@ -63,7 +69,8 @@ extension Arguments {
     public struct ExecuteActionsConfigure: ParsableArguments, Sendable {
         @Option(help: "\(Self.outputPathHelp)")
         public var outputPath: String
-        public static let outputPathHelp = "The path for a JSON array of Actions. Creates an example with each type of action."
+        public static let outputPathHelp =
+            "The path for a JSON array of Actions. Creates an example with each type of action."
 
         public init() {}
     }
@@ -77,27 +84,33 @@ extension Arguments {
 
         @Option(help: "\(Self.consolidationPeriodPathHelp)")
         public var consolidationPeriodPath: String?
-        public static let consolidationPeriodPathHelp = "The path for a ConsolidationPeriod JSON file. Consolidate will fail if file is not found. Defaults to a standard schedule when not provided."
+        public static let consolidationPeriodPathHelp =
+            "The path for a ConsolidationPeriod JSON file. Consolidate will fail if file is not found. Defaults to a standard schedule when not provided."
 
         @Option(help: "\(Self.consolidationPeriodUpperBoundHelp)")
         public var consolidationPeriodUpperBound: String?
-        public static let consolidationPeriodUpperBoundHelp = "The upperBound for the ConsolidationPeriod. Date will be parsed using the run's date format. Consolidate will fail if date cannot be parsed. Defaults to the run time."
+        public static let consolidationPeriodUpperBoundHelp =
+            "The upperBound for the ConsolidationPeriod. Date will be parsed using the run's date format. Consolidate will fail if date cannot be parsed. Defaults to the run time."
 
         @Option(help: "\(Self.datasetGrepHelp)")
         public var datasetGrep: String?
-        public static let datasetGrepHelp = "Consolidate snapshots for datasets containing this pattern. All datasets are synced if no pattern is provided."
+        public static let datasetGrepHelp =
+            "Consolidate snapshots for datasets containing this pattern. All datasets are synced if no pattern is provided."
 
         @Option(help: "\(Self.doNotDeleteSnapshotsPathHelp)")
         public var doNotDeleteSnapshotsPath: String?
-        public static let doNotDeleteSnapshotsPathHelp = "The path for a JSON array of ZFS snapshot names that will not be deleted, even if they would've been on consolidation."
+        public static let doNotDeleteSnapshotsPathHelp =
+            "The path for a JSON array of ZFS snapshot names that will not be deleted, even if they would've been on consolidation."
 
         @Option(help: "\(Self.maxPoolUtilizationHelp)")
         public var maxPoolUtilization: Float?
-        public static let maxPoolUtilizationHelp = "Maximum pool utilization percentage (0-100). Triggers aggressive pruning after consolidation if exceeded."
+        public static let maxPoolUtilizationHelp =
+            "Maximum pool utilization percentage (0-100). Triggers aggressive pruning after consolidation if exceeded."
 
         @Option(help: "\(Self.minFreeBytesHelp)")
         public var minFreeBytes: Int64?
-        public static let minFreeBytesHelp = "Minimum free bytes on pool. Triggers aggressive pruning after consolidation if below threshold."
+        public static let minFreeBytesHelp =
+            "Minimum free bytes on pool. Triggers aggressive pruning after consolidation if below threshold."
 
         public init() {}
     }
@@ -121,7 +134,8 @@ extension Arguments {
 
         @Option(help: "\(Self.configPathHelp)")
         public var configPath: String
-        public static let configPathHelp = "Full path, including name, of a Consolidator.Config JSON; .json will be appended if not provided. eg /path/to/snapshot-config/nas_consolidate"
+        public static let configPathHelp =
+            "Full path, including name, of a Consolidator.Config JSON; .json will be appended if not provided. eg /path/to/snapshot-config/nas_consolidate"
 
         public init() {}
     }
@@ -135,19 +149,28 @@ extension Arguments {
 
         @Option(help: "\(Self.datasetGrepHelp)")
         public var datasetGrep: String?
-        public static let datasetGrepHelp = "Takes snapshots for datasets containing this pattern or all datasets if no pattern is provided."
+        public static let datasetGrepHelp =
+            "Takes snapshots for datasets containing this pattern or all datasets if no pattern is provided."
 
         @Option(help: "\(Self.maxPoolUtilizationHelp)")
         public var maxPoolUtilization: Float?
-        public static let maxPoolUtilizationHelp = "Maximum pool utilization percentage (0-100). Snapshots are skipped if exceeded."
+        public static let maxPoolUtilizationHelp =
+            "Maximum pool utilization percentage (0-100). Snapshots are skipped if exceeded."
 
         @Option(help: "\(Self.minFreeBytesHelp)")
         public var minFreeBytes: Int64?
-        public static let minFreeBytesHelp = "Minimum free bytes on pool. Snapshots are skipped if below threshold."
+        public static let minFreeBytesHelp =
+            "Minimum free bytes on pool. Snapshots are skipped if below threshold."
 
         @Option(help: "\(Self.recursiveHelp)")
         public var recursive: Bool?
-        public static let recursiveHelp = "Recursively takes snapshots of all child datasets, eg zfs snapshot -r dataset. Defaults to \(Defaults.recursive)."
+        public static let recursiveHelp =
+            "Recursively takes snapshots of all child datasets, eg zfs snapshot -r dataset. Defaults to \(Defaults.recursive)."
+
+        @Option(help: "\(Self.excludedDatasetGrepsHelp)")
+        public var excludedDatasetGreps: [String] = []
+        public static let excludedDatasetGrepsHelp =
+            "Dataset substrings to exclude from snapshot creation. Repeat the option to skip received/forwarded trees during broad snapshot runs."
 
         public init() {}
     }
@@ -159,7 +182,8 @@ extension Arguments {
 
         @Option(help: "\(Self.outputPathHelp)")
         public var outputPath: String
-        public static let outputPathHelp = "The output path for the Snapshotter.Config JSON; please include full path, .json extension will be appended if needed."
+        public static let outputPathHelp =
+            "The output path for the Snapshotter.Config JSON; please include full path, .json extension will be appended if needed."
 
         public init() {}
     }
@@ -171,7 +195,8 @@ extension Arguments {
 
         @Option(help: "\(Self.configPathHelp)")
         public var configPath: String
-        public static let configPathHelp = "Full path, including name, of a Snapshotter.Config JSON; .json will be appended if not provided. eg /path/to/snapshot-config/nas_snapshot"
+        public static let configPathHelp =
+            "Full path, including name, of a Snapshotter.Config JSON; .json will be appended if not provided. eg /path/to/snapshot-config/nas_snapshot"
 
         public init() {}
     }
@@ -185,7 +210,8 @@ extension Arguments {
 
         @Option(help: "\(Self.datasetGrepHelp)")
         public var datasetGrep: String?
-        public static let datasetGrepHelp = "Sync snapshots for datasets containing this pattern. All datasets are synced if no pattern is provided."
+        public static let datasetGrepHelp =
+            "Sync snapshots for datasets containing this pattern. All datasets are synced if no pattern is provided."
 
         @Option(help: "\(Self.sshPortHelp)")
         public var sshPort: String
@@ -205,15 +231,28 @@ extension Arguments {
 
         @Option(help: "\(Self.remotePathStripHelp)")
         public var remotePathStrip: String?
-        public static let remotePathStripHelp = "Strip this prefix from the local dataset path before computing the remote path. Use with --remote-path-root to redirect snapshots to a different location on the destination. Defaults to no strip."
+        public static let remotePathStripHelp =
+            "Strip this prefix from the local dataset path before computing the remote path. Use with --remote-path-root to redirect snapshots to a different location on the destination. Defaults to no strip."
 
         @Option(help: "\(Self.remotePathRootHelp)")
         public var remotePathRoot: String?
-        public static let remotePathRootHelp = "Prepend this root to the (possibly stripped) dataset path on the destination. E.g. --remote-path-root pool_b/backups makes 'pool_a/data' arrive as 'pool_b/backups/pool_a/data' on the remote. Defaults to no prepend (recv path matches send path)."
+        public static let remotePathRootHelp =
+            "Prepend this root to the (possibly stripped) dataset path on the destination. E.g. --remote-path-root pool_b/backups makes 'pool_a/data' arrive as 'pool_b/backups/pool_a/data' on the remote. Defaults to no prepend (recv path matches send path)."
 
         @Option(help: "\(Self.sendRateLimitHelp)")
         public var sendRateLimit: String?
-        public static let sendRateLimitHelp = "Limit zfs send throughput with pv -q -L. Example: 20M. Defaults to no rate limit."
+        public static let sendRateLimitHelp =
+            "Limit zfs send throughput with pv -q -L. Example: 20M. Defaults to no rate limit."
+
+        @Option(help: "\(Self.pruneRemoteSnapshotsHelp)")
+        public var pruneRemoteSnapshots: Bool?
+        public static let pruneRemoteSnapshotsHelp =
+            "Destroy remote snapshots that are no longer present locally. Defaults to true for compatibility; set false for append-only/offsite receivers."
+
+        @Option(help: "\(Self.sentBookmarkNameHelp)")
+        public var sentBookmarkName: String?
+        public static let sentBookmarkNameHelp =
+            "Optional per-destination local bookmark name (without dataset#) to advance after successful sends and use as an incremental base after source snapshots are pruned."
 
         public init() {}
     }
@@ -225,7 +264,8 @@ extension Arguments {
 
         @Option(help: "\(Self.outputPathHelp)")
         public var outputPath: String
-        public static let outputPathHelp = "The output path for the Syncer.Config JSON file; please include full path, .json extension will be appended if needed."
+        public static let outputPathHelp =
+            "The output path for the Syncer.Config JSON file; please include full path, .json extension will be appended if needed."
 
         public init() {}
     }
@@ -237,7 +277,8 @@ extension Arguments {
 
         @Option(help: "\(Self.configPathHelp)")
         public var configPath: String
-        public static let configPathHelp = "Full path, including name, of a Syncer.Config JSON; .json will be appended if not provided. eg /path/to/snapshot-config/nas_sync"
+        public static let configPathHelp =
+            "Full path, including name, of a Syncer.Config JSON; .json will be appended if not provided. eg /path/to/snapshot-config/nas_sync"
 
         public init() {}
     }
@@ -249,35 +290,48 @@ extension Arguments {
     public struct Build: ParsableArguments, Sendable {
         @Option(help: "\(Self.remoteHelp)")
         public var remote: String?
-        public static let remoteHelp = "SSH destination (host or ~/.ssh/config alias) to build on. Builds locally when omitted."
+        public static let remoteHelp =
+            "SSH destination (host or ~/.ssh/config alias) to build on. Builds locally when omitted."
 
         @Option(help: "\(Self.sourceDirHelp)")
         public var sourceDir: String?
-        public static let sourceDirHelp = "Source directory to build. Defaults to the current directory."
+        public static let sourceDirHelp =
+            "Source directory to build. Defaults to the current directory."
 
         @Option(help: "\(Self.tempDirHelp)")
         public var tempDir: String?
-        public static let tempDirHelp = "Remote directory to rsync the source into and build in, relative to the remote home directory (or absolute). Defaults to zfs-tools-build."
+        public static let tempDirHelp =
+            "Remote directory to rsync the source into and build in, relative to the remote home directory (or absolute). Root, empty, parent-directory paths, and broad absolute paths are rejected; an absolute basename must contain zfs-tools-build. Defaults to zfs-tools-build."
 
         @Option(help: "\(Self.destinationHelp)")
         public var destination: String?
-        public static let destinationHelp = "Output path for the built binary. Defaults to <source>/bin/<platform>/zfs-tools."
+        public static let destinationHelp =
+            "Output path for the built binary. Defaults to <source>/bin/<platform>/zfs-tools."
 
         @Option(help: "\(Self.platformHelp)")
         public var platform: String?
-        public static let platformHelp = "Override the bin/<platform> directory (e.g. linux-x86_64). Derived from uname at the build site when omitted."
+        public static let platformHelp =
+            "Override the bin/<platform> directory (e.g. linux-x86_64). Derived from uname at the build site when omitted."
 
         @Option(help: "\(Self.swiftHelp)")
         public var swift: String?
-        public static let swiftHelp = "Path to the swift binary on the build site. Defaults to 'swift' (PATH); a remote may need an absolute path."
+        public static let swiftHelp =
+            "Path to the swift binary on the build site. Defaults to 'swift' (PATH); a remote may need an absolute path."
 
         @Option(help: "\(Self.configurationHelp)")
         public var configuration: String?
-        public static let configurationHelp = "Build configuration: release or debug. Defaults to release."
+        public static let configurationHelp =
+            "Build configuration: release or debug. Defaults to release."
 
         @Flag(help: "\(Self.keepTempHelp)")
         public var keepTemp: Bool = false
-        public static let keepTempHelp = "Keep the remote build directory instead of removing it after the build."
+        public static let keepTempHelp =
+            "Keep the remote build directory instead of removing it after the build."
+
+        @Flag(inversion: .prefixedNo, help: "\(Self.staticSwiftStdlibHelp)")
+        public var staticSwiftStdlib: Bool = true
+        public static let staticSwiftStdlibHelp =
+            "Statically link the Swift stdlib where supported so Linux binaries run on hosts without a Swift toolchain installed. Defaults to true; pass --no-static-swift-stdlib for a dynamic build."
 
         public init() {}
     }

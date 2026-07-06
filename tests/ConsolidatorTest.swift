@@ -351,4 +351,60 @@ final class ConsolidatorTest: XCTestCase {
             timeout: timeout
         )
     }
+
+    func testManualSnapshotNamesAreIgnoredInsteadOfFailingConsolidation() async throws {
+        let expectDestroy20220801 = expectation(description: "expect destroy parseable snapshot")
+        let expectDestroy20220805 = expectation(description: "expect destroy parseable snapshot")
+        let expectManualIsNotDestroyed = expectation(description: "manual snapshot is not destroyed")
+        expectManualIsNotDestroyed.isInverted = true
+        let config = makeConfig(
+            schedule: .Builder(upperBound: testDateString)
+                .keepingSnapshots(1, every: 1, .weeks, repeatedBy: 1)
+                .build()
+        )
+        let shell = ShellAtPath { @Sendable (
+            _ command: ShellCommand,
+            _ dryRun: Bool,
+            _ estimatedOutputSize: Int?,
+            _ estimatedErrorSize: Int?,
+            _ statusesForResult: ShellTermination.StatusesForResult,
+            _ stream: ShellStream?,
+            _ timeout: TimeInterval?
+        ) async -> ShellResult in
+            switch command {
+            case "zfs list -o name -H | grep 'nas_12tb/nas/' || true":
+                return .success(stdout: "nas_12tb/nas/documents")!
+            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas/' || true":
+                return .success(
+                    stdout: """
+                    nas_12tb/nas/documents@manual-before-migration
+                    nas_12tb/nas/documents@20220805-000000
+                    nas_12tb/nas/documents@20220803-000000
+                    nas_12tb/nas/documents@20220801-000000
+                    """
+                )!
+            case "zfs destroy 'nas_12tb/nas/documents@20220801-000000'":
+                expectDestroy20220801.fulfill()
+                return .success()
+            case "zfs destroy 'nas_12tb/nas/documents@20220805-000000'":
+                expectDestroy20220805.fulfill()
+                return .success()
+            case "zfs destroy 'nas_12tb/nas/documents@manual-before-migration'":
+                expectManualIsNotDestroyed.fulfill()
+                return .success()
+            default:
+                XCTFail("unexpected command: \(command)")
+                return .success()
+            }
+        }
+        let consolidator = Consolidator(
+            calendar: calendar,
+            config: config,
+            date: { [testDate] in testDate },
+            dateFormatter: dateFormatter,
+            shell: shell
+        )
+        try await consolidator.consolidate()
+        await fulfillment(of: [expectDestroy20220801, expectDestroy20220805, expectManualIsNotDestroyed], timeout: timeout)
+    }
 }

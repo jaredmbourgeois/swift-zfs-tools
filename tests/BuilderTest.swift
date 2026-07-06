@@ -50,7 +50,8 @@ final class BuilderTest: XCTestCase {
             platformOverride: nil,
             swift: "swift",
             configuration: "release",
-            keepTempDirectory: false
+            keepTempDirectory: false,
+            staticSwiftStdlib: false
         )
         try await Builder(config: config, shell: shell).build()
         XCTAssertEqual(
@@ -67,28 +68,29 @@ final class BuilderTest: XCTestCase {
 
     func testRemoteBuildCommandSequence() async throws {
         let recorder = Locked<[String]>([])
-        let shell = mockShell(recorder, uname: "Linux\nx86_64", binPath: "/tmp/ztb/.build/release")
+        let shell = mockShell(recorder, uname: "Linux\nx86_64", binPath: "/tmp/zfs-tools-build/.build/release")
         let config = Builder.Config(
             remote: "serverJMB",
             sourceDirectory: "/repo",
-            tempDirectory: "/tmp/ztb",
+            tempDirectory: "/tmp/zfs-tools-build",
             destination: nil,
             platformOverride: nil,
             swift: "swift",
             configuration: "release",
-            keepTempDirectory: false
+            keepTempDirectory: false,
+            staticSwiftStdlib: false
         )
         try await Builder(config: config, shell: shell).build()
         XCTAssertEqual(
             recorder.value,
             [
                 "ssh 'serverJMB' 'uname -s && uname -m'",
-                "rsync -az --exclude='.git' --exclude='.build' --exclude='build' --exclude='bin' '/repo/' 'serverJMB:/tmp/ztb/'",
-                "ssh 'serverJMB' 'cd '\\''/tmp/ztb'\\'' && '\\''swift'\\'' build -c '\\''release'\\'''",
-                "ssh 'serverJMB' 'cd '\\''/tmp/ztb'\\'' && '\\''swift'\\'' build --show-bin-path -c '\\''release'\\'''",
+                "rsync -az --exclude='.git' --exclude='.build' --exclude='build' --exclude='bin' '/repo/' 'serverJMB:/tmp/zfs-tools-build/'",
+                "ssh 'serverJMB' 'cd '\\''/tmp/zfs-tools-build'\\'' && '\\''swift'\\'' build -c '\\''release'\\'''",
+                "ssh 'serverJMB' 'cd '\\''/tmp/zfs-tools-build'\\'' && '\\''swift'\\'' build --show-bin-path -c '\\''release'\\'''",
                 "mkdir -p '/repo/bin/linux-x86_64'",
-                "scp 'serverJMB:/tmp/ztb/.build/release/ZFSTools' '/repo/bin/linux-x86_64/zfs-tools'",
-                "ssh 'serverJMB' 'rm -rf '\\''/tmp/ztb'\\'''",
+                "scp 'serverJMB:/tmp/zfs-tools-build/.build/release/ZFSTools' '/repo/bin/linux-x86_64/zfs-tools'",
+                "ssh 'serverJMB' 'rm -rf '\\''/tmp/zfs-tools-build'\\'''",
             ]
         )
     }
@@ -104,7 +106,8 @@ final class BuilderTest: XCTestCase {
             platformOverride: "linux-aarch64",
             swift: "swift",
             configuration: "release",
-            keepTempDirectory: false
+            keepTempDirectory: false,
+            staticSwiftStdlib: false
         )
         try await Builder(config: config, shell: shell).build()
         XCTAssertFalse(recorder.value.contains { $0.contains("uname") }, "override must skip the uname probe")
@@ -113,19 +116,70 @@ final class BuilderTest: XCTestCase {
 
     func testKeepTempDirectorySkipsCleanup() async throws {
         let recorder = Locked<[String]>([])
-        let shell = mockShell(recorder, uname: "Linux\nx86_64", binPath: "/tmp/ztb/.build/release")
+        let shell = mockShell(recorder, uname: "Linux\nx86_64", binPath: "/tmp/zfs-tools-build/.build/release")
         let config = Builder.Config(
             remote: "serverJMB",
             sourceDirectory: "/repo",
-            tempDirectory: "/tmp/ztb",
+            tempDirectory: "/tmp/zfs-tools-build",
             destination: nil,
             platformOverride: nil,
             swift: "swift",
             configuration: "release",
-            keepTempDirectory: true
+            keepTempDirectory: true,
+            staticSwiftStdlib: false
         )
         try await Builder(config: config, shell: shell).build()
         XCTAssertFalse(recorder.value.contains { $0.contains("rm -rf") }, "keepTempDirectory must skip cleanup")
+    }
+
+    func testUnsafeRemoteTempDirectoryFailsBeforeShellExecution() async throws {
+        let recorder = Locked<[String]>([])
+        let shell = mockShell(recorder, uname: "Linux\nx86_64", binPath: "/tmp/ztb/.build/release")
+        let config = Builder.Config(
+            remote: "serverJMB",
+            sourceDirectory: "/repo",
+            tempDirectory: "/",
+            destination: nil,
+            platformOverride: "linux-x86_64",
+            swift: "swift",
+            configuration: "release",
+            keepTempDirectory: false,
+            staticSwiftStdlib: false
+        )
+        do {
+            try await Builder(config: config, shell: shell).build()
+            XCTFail("unsafe tempDirectory should throw")
+        } catch ErrorType.invalidArgument(let name, let value, _, _) {
+            XCTAssertEqual(name, "tempDirectory")
+            XCTAssertEqual(value, "/")
+        }
+        XCTAssertTrue(recorder.value.isEmpty, "unsafe tempDirectory must fail before rsync/build/cleanup")
+    }
+
+    func testBroadAbsoluteRemoteTempDirectoriesFailBeforeShellExecution() async throws {
+        for tempDirectory in ["/home/jared", "/home/jared/.swiftly", "/var/tmp"] {
+            let recorder = Locked<[String]>([])
+            let shell = mockShell(recorder, uname: "Linux\nx86_64", binPath: "/tmp/zfs-tools-build/.build/release")
+            let config = Builder.Config(
+                remote: "serverJMB",
+                sourceDirectory: "/repo",
+                tempDirectory: tempDirectory,
+                destination: nil,
+                platformOverride: "linux-x86_64",
+                swift: "swift",
+                configuration: "release",
+                keepTempDirectory: false,
+                staticSwiftStdlib: false
+            )
+            do {
+                try await Builder(config: config, shell: shell).build()
+                XCTFail("unsafe tempDirectory should throw: \(tempDirectory)")
+            } catch ErrorType.invalidArgument(let name, let value, _, _) {
+                XCTAssertEqual(name, "tempDirectory")
+                XCTAssertEqual(value, tempDirectory)
+            }
+            XCTAssertTrue(recorder.value.isEmpty, "unsafe tempDirectory must fail before rsync/build/cleanup")
+        }
     }
 
     func testCustomDestinationIsHonored() async throws {
@@ -139,10 +193,31 @@ final class BuilderTest: XCTestCase {
             platformOverride: nil,
             swift: "swift",
             configuration: "release",
-            keepTempDirectory: false
+            keepTempDirectory: false,
+            staticSwiftStdlib: false
         )
         try await Builder(config: config, shell: shell).build()
         XCTAssertEqual("cp '/repo/.build/release/ZFSTools' '/out/zfs-tools'", recorder.value.last)
         XCTAssertTrue(recorder.value.contains("mkdir -p '/out'"))
+    }
+
+    func testStaticSwiftStdlibAddsBuildFlag() async throws {
+        let recorder = Locked<[String]>([])
+        let shell = mockShell(recorder, uname: "Darwin\narm64", binPath: "/repo/.build/release")
+        let config = Builder.Config(
+            remote: nil,
+            sourceDirectory: "/repo",
+            tempDirectory: "/tmp/ztb",
+            destination: nil,
+            platformOverride: nil,
+            swift: "swift",
+            configuration: "release",
+            keepTempDirectory: false,
+            staticSwiftStdlib: true
+        )
+        try await Builder(config: config, shell: shell).build()
+        XCTAssertTrue(
+            recorder.value.contains("cd '/repo' && 'swift' build -c 'release' --static-swift-stdlib")
+        )
     }
 }

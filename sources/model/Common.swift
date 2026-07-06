@@ -133,6 +133,41 @@ struct SnapshotAndDate: Equatable, Sendable {
     let date: Date
 }
 
+struct SnapshotRecord: Equatable, Sendable {
+    let guid: String
+    let createtxg: UInt64
+    let name: String
+
+    var dataset: String {
+        name.split(separator: "@", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? name
+    }
+
+    var bookmarkDataset: String {
+        name.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? name
+    }
+
+    func withName(_ newName: String) -> SnapshotRecord {
+        SnapshotRecord(guid: guid, createtxg: createtxg, name: newName)
+    }
+
+    static func parse(_ line: String, command: String) throws -> SnapshotRecord {
+        let fields = line.split(separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
+        guard fields.count == 3 else {
+            throw ErrorType.shellError(
+                command: command,
+                error: "expected guid, createtxg, name fields for snapshot record: \(line)"
+            )
+        }
+        guard let createtxg = UInt64(fields[1]) else {
+            throw ErrorType.shellError(
+                command: command,
+                error: "expected integer createtxg for snapshot record: \(line)"
+            )
+        }
+        return SnapshotRecord(guid: String(fields[0]), createtxg: createtxg, name: String(fields[2]))
+    }
+}
+
 extension String {
     /// POSIX-safe single-quoting for shell arguments: wrap in single quotes and escape any
     /// embedded single quote as the standard `'\''` (close-quote, literal quote, reopen-quote).
@@ -170,6 +205,27 @@ enum ZFS {
             command += " | grep \(grepping.shellQuoted) || true"
         }
         return command
+    }
+
+    static func listSnapshotRecords(grepping: String? = nil) -> String {
+        var command = "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg"
+        if let grepping {
+            // See note on listDatasets — same rationale (e.g. fresh remote with no snapshots yet).
+            command += " | grep \(grepping.shellQuoted) || true"
+        }
+        return command
+    }
+
+    static func listBookmarkRecords(grepping: String? = nil) -> String {
+        var command = "zfs list -t bookmark -H -p -o guid,createtxg,name -s createtxg"
+        if let grepping {
+            command += " | grep \(grepping.shellQuoted) || true"
+        }
+        return command
+    }
+
+    static func bookmark(snapshot: String, bookmark: String) -> String {
+        "zfs bookmark \(snapshot.shellQuoted) \(bookmark.shellQuoted)"
     }
 
     static func snapshot(dataset: String, date: Date, dateFormatter: DateFormatter, dateSeparator: String, recursive: Bool = false) -> String {

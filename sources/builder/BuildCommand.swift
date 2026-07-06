@@ -14,22 +14,26 @@ import ZFSToolsModel
 struct BuildCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "zfs-tools-build",
-        abstract: "Build the zfs-tools binary into bin/<platform>/ — locally, or on a remote host over SSH.",
+        abstract:
+            "Build the zfs-tools binary into bin/<platform>/ — locally, or on a remote host over SSH.",
         discussion: """
-        Builds locally when --remote is omitted, otherwise rsyncs the source to the remote, builds there,
-        and copies the artifact back. The target platform (bin/<platform>) is derived from `uname` at the
-        build site; override it with --platform. Every command is printed as it runs.
+            Builds locally when --remote is omitted, otherwise rsyncs the source to the remote, builds there,
+            and copies the artifact back. The target platform (bin/<platform>) is derived from `uname` at the
+            build site; override it with --platform. Builds statically link the Swift stdlib by default
+            where supported so Linux artifacts run without a Swift toolchain; pass --no-static-swift-stdlib
+            to opt into a dynamic Swift-runtime build. This does not make the Linux artifact fully static:
+            it still depends on the platform C runtime/dynamic loader. Every command is printed as it runs.
 
-        # Rebuild this host's binary in place
-        zfs-tools-build
+            # Rebuild this host's binary in place
+            zfs-tools-build
 
-        # Build on a remote host over SSH and copy the binary back
-        zfs-tools-build --remote user@buildhost
+            # Build on a remote host over SSH and copy the binary back
+            zfs-tools-build --remote user@buildhost
 
-        # If Swift isn't on the remote's PATH, point at it
-        zfs-tools-build --remote user@buildhost --swift /path/to/swift
-        """,
-        version: "2.0.2"
+            # If Swift isn't on the remote's PATH, point at it
+            zfs-tools-build --remote user@buildhost --swift /path/to/swift
+            """,
+        version: "2.0.3"
     )
 
     @OptionGroup

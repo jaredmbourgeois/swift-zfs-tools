@@ -67,14 +67,15 @@ public struct Consolidator: Sendable {
             for dataset in datasetsLocal {
                 taskGroup.addTask {
                     let snapshotsForDatasetPrefix = dataset + config.dateSeparator
-                    let snapshotAndDatesForDataset: [SnapshotAndDate] = try snapshotsLocal
+                    let snapshotAndDatesForDataset: [SnapshotAndDate] = snapshotsLocal
                         .compactMap {
                             guard $0.hasPrefix(snapshotsForDatasetPrefix) else {
                                 return nil
                             }
+                            guard let date = parseSnapshotDate($0) else { return nil }
                             return SnapshotAndDate(
                                 snapshot: $0,
-                                date: try dateFormatter.dateForSnapshot($0, dateSeparator: config.dateSeparator)
+                                date: date
                             )
                         }
                         .sorted { $0.date > $1.date }
@@ -171,14 +172,15 @@ public struct Consolidator: Sendable {
         datasetsLocal: [String],
         snapshotsLocal: [String]
     ) async throws {
-        var allSnapshotAndDates: [SnapshotAndDate] = try snapshotsLocal
+        var allSnapshotAndDates: [SnapshotAndDate] = snapshotsLocal
             .compactMap { snapshot in
                 guard datasetsLocal.contains(where: { snapshot.hasPrefix($0 + config.dateSeparator) }) else {
                     return nil
                 }
+                guard let date = parseSnapshotDate(snapshot) else { return nil }
                 return SnapshotAndDate(
                     snapshot: snapshot,
-                    date: try dateFormatter.dateForSnapshot(snapshot, dateSeparator: config.dateSeparator)
+                    date: date
                 )
             }
             .sorted { $0.date < $1.date }
@@ -216,6 +218,10 @@ public struct Consolidator: Sendable {
     private struct DateRangeAndSnapshotCount {
         let range: Range<Date>
         let snapshots: UInt16
+    }
+
+    private func parseSnapshotDate(_ snapshot: String) -> Date? {
+        try? dateFormatter.dateForSnapshot(snapshot, dateSeparator: config.dateSeparator)
     }
 
     private func dateRangeAndShapshotCounts(

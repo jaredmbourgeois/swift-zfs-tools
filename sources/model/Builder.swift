@@ -22,8 +22,16 @@ enum Build {
         "cd \(directory.shellQuoted) && \(command)"
     }
 
-    static func swiftBuild(swift: String, configuration: String) -> String {
-        "\(swift.shellQuoted) build -c \(configuration.shellQuoted)"
+    static func swiftBuild(swift: String, configuration: String, staticSwiftStdlib: Bool) -> String
+    {
+        var command = "\(swift.shellQuoted) build -c \(configuration.shellQuoted)"
+        if staticSwiftStdlib {
+            // Statically links the Swift stdlib so the artifact runs on a host with no Swift
+            // toolchain (the recv-guard receivers). Only the build needs it; --show-bin-path is
+            // unaffected (same release dir).
+            command += " --static-swift-stdlib"
+        }
+        return command
     }
 
     /// `swift build --show-bin-path` prints the directory holding the built products — used to locate
@@ -88,7 +96,8 @@ public struct Builder: Sendable {
 
     public func build() async throws {
         let platform = try await resolvePlatform()
-        let destination = config.destination ?? "\(config.sourceDirectory)/bin/\(platform)/zfs-tools"
+        let destination =
+            config.destination ?? "\(config.sourceDirectory)/bin/\(platform)/zfs-tools"
         if let remote = config.remote {
             try await buildRemote(remote: remote, destination: destination)
         } else {
@@ -102,24 +111,38 @@ public struct Builder: Sendable {
         if let override = config.platformOverride {
             return override
         }
-        let unameCommand = config.remote.map { Build.remote(ssh: $0, command: Build.uname()) } ?? Build.uname()
-        let lines = try await shell.lines(unameCommand, dryRun: false, encoding: .utf8, lineSeparator: "\n")
-        guard lines.count >= 2, let platform = BuildPlatform.directoryName(unameS: lines[0], unameM: lines[1]) else {
-            throw ErrorType.shellError(command: unameCommand, error: "could not derive platform from uname output: \(lines)")
+        let unameCommand =
+            config.remote.map { Build.remote(ssh: $0, command: Build.uname()) } ?? Build.uname()
+        let lines = try await shell.lines(
+            unameCommand, dryRun: false, encoding: .utf8, lineSeparator: "\n")
+        guard lines.count >= 2,
+            let platform = BuildPlatform.directoryName(unameS: lines[0], unameM: lines[1])
+        else {
+            throw ErrorType.shellError(
+                command: unameCommand,
+                error: "could not derive platform from uname output: \(lines)")
         }
         return platform
     }
 
     private func buildLocal(destination: String) async throws {
-        let buildCommand = Build.inDirectory(config.sourceDirectory, run: Build.swiftBuild(swift: config.swift, configuration: config.configuration))
+        let buildCommand = Build.inDirectory(
+            config.sourceDirectory,
+            run: Build.swiftBuild(
+                swift: config.swift, configuration: config.configuration,
+                staticSwiftStdlib: config.staticSwiftStdlib))
         try await run(buildCommand)
-        let binPath = try await lastLine(Build.inDirectory(config.sourceDirectory, run: Build.swiftBinPath(swift: config.swift, configuration: config.configuration)))
+        let binPath = try await lastLine(
+            Build.inDirectory(
+                config.sourceDirectory,
+                run: Build.swiftBinPath(swift: config.swift, configuration: config.configuration)))
         try await run(Build.makeDirectory(parentDirectory(of: destination)))
         try await run(Build.copy(from: "\(binPath)/\(Self.productName)", to: destination))
     }
 
     private func buildRemote(remote: String, destination: String) async throws {
         let temp = config.tempDirectory
+        try Self.validateTempDirectory(temp)
         try await run(
             Build.rsync(
                 source: "\(config.sourceDirectory)/",
@@ -127,8 +150,22 @@ public struct Builder: Sendable {
                 excludes: Self.rsyncExcludes
             )
         )
-        try await run(Build.remote(ssh: remote, command: Build.inDirectory(temp, run: Build.swiftBuild(swift: config.swift, configuration: config.configuration))))
-        let binPath = try await lastLine(Build.remote(ssh: remote, command: Build.inDirectory(temp, run: Build.swiftBinPath(swift: config.swift, configuration: config.configuration))))
+        try await run(
+            Build.remote(
+                ssh: remote,
+                command: Build.inDirectory(
+                    temp,
+                    run: Build.swiftBuild(
+                        swift: config.swift, configuration: config.configuration,
+                        staticSwiftStdlib: config.staticSwiftStdlib))
+            ))
+        let binPath = try await lastLine(
+            Build.remote(
+                ssh: remote,
+                command: Build.inDirectory(
+                    temp,
+                    run: Build.swiftBinPath(
+                        swift: config.swift, configuration: config.configuration))))
         try await run(Build.makeDirectory(parentDirectory(of: destination)))
         try await run(Build.scp(from: "\(remote):\(binPath)/\(Self.productName)", to: destination))
         if !config.keepTempDirectory {
@@ -142,8 +179,13 @@ public struct Builder: Sendable {
 
     /// Run `command` and return its last non-empty stdout line (the `--show-bin-path` path).
     private func lastLine(_ command: String) async throws -> String {
-        let lines = try await shell.lines(command, dryRun: false, encoding: .utf8, lineSeparator: "\n")
-        guard let line = lines.last(where: { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+        let lines = try await shell.lines(
+            command, dryRun: false, encoding: .utf8, lineSeparator: "\n")
+        guard
+            let line = lines.last(where: {
+                !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            })
+        else {
             throw ErrorType.shellError(command: command, error: "no output")
         }
         return line.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -151,6 +193,28 @@ public struct Builder: Sendable {
 
     private func parentDirectory(of path: String) -> String {
         URL(fileURLWithPath: path).deletingLastPathComponent().path
+    }
+
+    private static func validateTempDirectory(_ path: String) throws {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        let unsafePaths = ["", "/", ".", ".."]
+        let pathComponents = trimmed.split(separator: "/").map(String.init)
+        let basename = pathComponents.last ?? ""
+        let isAbsolute = trimmed.hasPrefix("/")
+        guard !unsafePaths.contains(trimmed), !trimmed.hasPrefix("../"), !trimmed.hasSuffix("/.."), !trimmed.contains("/../"), !trimmed.hasPrefix("~/") else {
+            throw ErrorType.invalidArgument(
+                name: "tempDirectory",
+                value: path,
+                reason: "expected a non-root build directory without parent-directory components"
+            )
+        }
+        guard !isAbsolute || basename.contains("zfs-tools-build") else {
+            throw ErrorType.invalidArgument(
+                name: "tempDirectory",
+                value: path,
+                reason: "expected an absolute build directory basename containing zfs-tools-build"
+            )
+        }
     }
 }
 
@@ -166,6 +230,7 @@ extension Builder {
         public let swift: String
         public let configuration: String
         public let keepTempDirectory: Bool
+        public let staticSwiftStdlib: Bool
 
         public init(
             remote: String?,
@@ -175,7 +240,8 @@ extension Builder {
             platformOverride: String?,
             swift: String,
             configuration: String,
-            keepTempDirectory: Bool
+            keepTempDirectory: Bool,
+            staticSwiftStdlib: Bool
         ) {
             self.remote = remote
             self.sourceDirectory = sourceDirectory
@@ -185,6 +251,7 @@ extension Builder {
             self.swift = swift
             self.configuration = configuration
             self.keepTempDirectory = keepTempDirectory
+            self.staticSwiftStdlib = staticSwiftStdlib
         }
 
         public init(arguments: Arguments.Build) {
@@ -199,6 +266,7 @@ extension Builder {
             swift = arguments.swift ?? "swift"
             configuration = arguments.configuration ?? "release"
             keepTempDirectory = arguments.keepTemp
+            staticSwiftStdlib = arguments.staticSwiftStdlib
         }
     }
 }
