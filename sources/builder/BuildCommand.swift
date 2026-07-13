@@ -33,7 +33,7 @@ struct BuildCommand: AsyncParsableCommand {
             # If Swift isn't on the remote's PATH, point at it
             zfs-tools-build --remote user@buildhost --swift /path/to/swift
             """,
-        version: "2.0.3"
+        version: ToolVersion.current
     )
 
     @OptionGroup

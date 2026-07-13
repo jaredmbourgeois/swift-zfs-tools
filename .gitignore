@@ -1,4 +1,5 @@
 make_bins.sh
+/bin
 /.build
 /build
 *.o

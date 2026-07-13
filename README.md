@@ -8,16 +8,14 @@ Built on [swift-argument-parser](https://github.com/apple/swift-argument-parser)
 
 ## Install
 
-### Prebuilt binaries
-
-The repository includes convenience binaries for macOS Apple Silicon and Linux x86_64:
+Binaries are built on demand, not committed to the repository — `bin/` is regenerable output
+(`.gitignore`d), not a source artifact. See "Build the platform binaries" below to build for your
+platform (locally, or cross-built onto a remote host over SSH), then install the result:
 
 ```bash
 sudo install -m 0755 bin/macos-arm64/zfs-tools  /usr/local/bin/zfs-tools   # macOS Apple Silicon
 sudo install -m 0755 bin/linux-x86_64/zfs-tools /usr/local/bin/zfs-tools   # Linux x86_64
 ```
-
-If your platform is not listed, build from source on that host.
 
 ### Build from source
 
@@ -32,9 +30,9 @@ swift build -c release
 
 Compile-time defaults (retention schedule, date format, shell) live in `sources/model/Defaults.swift`.
 
-### Regenerate the prebuilt binaries
+### Build the platform binaries
 
-`zfs-tools-build` rebuilds `bin/<platform>/zfs-tools`, deriving the platform from `uname` at the build site (override with `--platform`). It builds locally when `--remote` is omitted, otherwise rsyncs the source to the host, builds there, and copies the artifact back (override the output with `--destination`).
+`zfs-tools-build` builds `bin/<platform>/zfs-tools`, deriving the platform from `uname` at the build site (override with `--platform`). It builds locally when `--remote` is omitted, otherwise rsyncs the source to the host, builds there, and copies the artifact back (override the output with `--destination`).
 
 Release artifacts default to `--static-swift-stdlib` so Linux binaries can run on hosts without a Swift toolchain; pass `--no-static-swift-stdlib` only when you intentionally want a dynamic Swift-runtime build. This is not a fully static binary: Linux artifacts still depend on the platform C runtime/dynamic loader, and macOS builds still link Apple's system Swift dylibs because modern Swift no longer supports static Swift stdlib linkage on macOS.
 
