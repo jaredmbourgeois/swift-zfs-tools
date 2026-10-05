@@ -74,6 +74,8 @@ zfs destroy 'tank/data@20250101-000000'
 set -o pipefail; zfs send -v -i 'tank/data@<prev>' 'tank/data@<latest>' \
   | pv -q -L '20M' \
   | ssh -p '22' -i '~/.ssh/backup_key' 'backup'@'backup.server.com' zfs recv -F 'tank/data@<latest>'
+set -o pipefail; zfs send -v -I 'tank/data@<base>' 'tank/data@<latest>' \
+  | ssh -p '22' -i '~/.ssh/backup_key' 'backup'@'backup.server.com' zfs recv -F 'tank/data'
 ```
 
 ## Safety notes
@@ -124,7 +126,7 @@ Applies a [GFS](https://en.wikipedia.org/wiki/Backup_rotation_scheme#Grandfather
 
 ### sync
 
-Replicates snapshots to a remote host via `zfs send | ssh zfs recv` — incremental when a common snapshot exists, full otherwise. By default, remote snapshots whose ZFS `guid` is absent locally are destroyed. Sends run sequentially, since [ZFS receive locks the dataset](https://docs.oracle.com/cd/E18752_01/html/819-5461/gbchx.html). See [Remote sync](#remote-sync).
+Replicates snapshots to a remote host via `zfs send | ssh zfs recv` — incremental when a common snapshot exists, full otherwise, and **at most two streams per dataset** however many snapshots it owes: one `-I` stream carries a whole run of snapshots (a bookmark base adds one `-i` first, since `-I` cannot start at a bookmark; no base adds a full send of the first). An owed list that is not provably one ascending run falls back to one `-i` per snapshot. Datasets run in name order, so a parent is received before its children. By default, remote snapshots whose ZFS `guid` is absent locally are destroyed. Sends run sequentially, since [ZFS receive locks the dataset](https://docs.oracle.com/cd/E18752_01/html/819-5461/gbchx.html). See [Remote sync](#remote-sync).
 
 | Option | Description |
 |--------|-------------|
@@ -134,7 +136,7 @@ Replicates snapshots to a remote host via `zfs send | ssh zfs recv` — incremen
 | `--remote-path-root` | Prepend this root to the (stripped) path on the remote |
 | `--send-rate-limit` | Optional local `pv -q -L` throughput limit for each `zfs send` pipeline |
 | `--prune-remote-snapshots` | Destroy remote snapshots absent locally; defaults to `true` for compatibility, set `false` for append-only/offsite receivers |
-| `--sent-bookmark-name` | Optional local bookmark component, e.g. `sent-backup`; after each successful send, `dataset#<name>` is advanced and can be used as an incremental base after source snapshots are pruned |
+| `--sent-bookmark-name` | Optional local bookmark component, e.g. `sent-backup`; once a dataset's streams have all landed, `dataset#<name>` is advanced to its newest snapshot and can be used as an incremental base after source snapshots are pruned |
 
 ### execute-actions
 
@@ -218,7 +220,7 @@ Add `--send-rate-limit <rate>` to throttle each local `zfs send` stream through 
 
 By default, sync preserves the historical pruning behavior: destination snapshots whose ZFS `guid` is absent locally are destroyed. This is intentionally based on `guid`, not names, so a remapped or differently named destination snapshot with the same identity is preserved. Set `--prune-remote-snapshots false` for append-only or intermittently available offsite receivers where destination history may intentionally outlive source retention.
 
-For offsites that may be unavailable longer than the source retention window, set `--sent-bookmark-name <stable-destination-name>`. The value is a bookmark component, not a full `dataset#bookmark` path; it must be non-empty and contain only letters, digits, `.`, `_`, `-`, or `:`. After each successful send, zfs-tools advances a local `dataset#<stable-destination-name>` bookmark, creating a temporary replacement before destroying the previous stable bookmark. On later runs, if the last sent source snapshot has been pruned but the destination still has the same guid, zfs-tools uses the bookmark as the `zfs send -i` base instead of falling back to a full send.
+For offsites that may be unavailable longer than the source retention window, set `--sent-bookmark-name <stable-destination-name>`. The value is a bookmark component, not a full `dataset#bookmark` path; it must be non-empty and contain only letters, digits, `.`, `_`, `-`, or `:`. Once a dataset's streams have all landed, zfs-tools advances a local `dataset#<stable-destination-name>` bookmark to its newest snapshot, creating a temporary replacement before destroying the previous stable bookmark. On later runs, if the last sent source snapshot has been pruned but the destination still has the same guid, zfs-tools uses the bookmark as the `zfs send -i` base instead of falling back to a full send.
 
 ### receive-guard
 

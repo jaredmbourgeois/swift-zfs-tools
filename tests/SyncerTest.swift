@@ -100,15 +100,11 @@ final class SyncerTest: XCTestCase {
         )
     }
 
+    /// The owed snapshots after a common SNAPSHOT go out as one `-I` stream into the dataset, not one
+    /// send per snapshot (2.2.0).
     func testSyncOnlyFutureAreSent() async throws {
         let config = SyncerConfigTest.syncConfig(execute: true)
-        let (
-            expectSend20220806,
-            expectSend20220807
-        ) = (
-            expectation(description: "expect send 20220806"),
-            expectation(description: "expect send 20220807")
-        )
+        let expectSend20220806Through20220807 = expectation(description: "one stream carries 20220806 and 20220807")
         let shell = ShellAtPath { @Sendable (
             _ command: ShellCommand,
             _ dryRun: Bool,
@@ -138,11 +134,8 @@ final class SyncerTest: XCTestCase {
                     "nas_12tb/nas/documents@20220805-000000",
                     "nas_12tb/nas/documents@20220801-000000",
                 ]))!
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220806-000000'\\'''":
-                expectSend20220806.fulfill()
-                return .success()
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220807-000000'\\'''":
-                expectSend20220807.fulfill()
+            case "set -o pipefail; zfs send -v -I 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents'\\'''":
+                expectSend20220806Through20220807.fulfill()
                 return .success()
             default:
                 XCTFail("unexpected command")
@@ -156,10 +149,7 @@ final class SyncerTest: XCTestCase {
         )
         try await syncer.sync()
         await fulfillment(
-            of: [
-                expectSend20220806,
-                expectSend20220807,
-            ],
+            of: [expectSend20220806Through20220807],
             timeout: 1,
             enforceOrder: false
         )
@@ -170,13 +160,11 @@ final class SyncerTest: XCTestCase {
         let (
             expectDelete20220804,
             expectDelete20220802,
-            expectSend20220806,
-            expectSend20220807
+            expectSend20220806Through20220807
         ) = (
             expectation(description: "delete 20220804"),
             expectation(description: "delete 20220802"),
-            expectation(description: "send 20220806"),
-            expectation(description: "send 20220807")
+            expectation(description: "one stream carries 20220806 and 20220807")
         )
         let shell = ShellAtPath { @Sendable (
             _ command: ShellCommand,
@@ -214,11 +202,8 @@ final class SyncerTest: XCTestCase {
             case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs destroy '\\''nas_12tb/nas/documents@20220802-000000'\\'''":
                 expectDelete20220802.fulfill()
                 return .success()
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220803-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220806-000000'\\'''":
-                expectSend20220806.fulfill()
-                return .success()
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220807-000000'\\'''":
-                expectSend20220807.fulfill()
+            case "set -o pipefail; zfs send -v -I 'nas_12tb/nas/documents@20220803-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents'\\'''":
+                expectSend20220806Through20220807.fulfill()
                 return .success()
             default:
                 XCTFail("unexpected command")
@@ -235,8 +220,7 @@ final class SyncerTest: XCTestCase {
             of: [
                 expectDelete20220804,
                 expectDelete20220802,
-                expectSend20220806,
-                expectSend20220807,
+                expectSend20220806Through20220807,
             ],
             timeout: 1,
             enforceOrder: false
@@ -806,7 +790,7 @@ final class SyncerTest: XCTestCase {
             expectation(description: "delete 20220801"),
             expectation(description: "delete 20220805"),
             expectation(description: "send 20220806"),
-            expectation(description: "send 20220807")
+            expectation(description: "send 20220807 as the -I stream after the full send")
         )
         let shell = ShellAtPath { @Sendable (
             _ command: ShellCommand,
@@ -843,7 +827,7 @@ final class SyncerTest: XCTestCase {
             case "set -o pipefail; zfs send -v 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220806-000000'\\'''":
                 expectSend20220806.fulfill()
                 return .success()
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220807-000000'\\'''":
+            case "set -o pipefail; zfs send -v -I 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents'\\'''":
                 expectSend20220807.fulfill()
                 return .success()
             default:

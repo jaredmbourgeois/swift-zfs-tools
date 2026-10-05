@@ -30,13 +30,16 @@ public struct Syncer: Sendable {
             "ssh -p \(config.sshPort.shellQuoted) -i \(config.sshKeyPath.shellQuoted) \(config.sshUser.shellQuoted)@\(config.sshIP.shellQuoted)"
     }
 
-    /// Replicate every matching dataset: destroy remote-only snapshots, then send each new local
-    /// snapshot (incremental where possible). Sends run sequentially — ZFS receive locks the dataset.
+    /// Replicate every matching dataset: destroy remote-only snapshots, then send the dataset's new
+    /// local snapshots as at most two streams (`sendSteps`). Datasets go in name order, so a parent
+    /// is always received before its children; sends run sequentially — ZFS receive locks the
+    /// dataset and its descendants.
     public func sync() async throws {
         let sendRateLimitPipe = try Self.sendRateLimitPipe(for: config.sendRateLimit)
         try Self.validateSentBookmarkName(config.sentBookmarkName)
-        let datasets = try await datasets()
-        // send and receive sequentially since ZFS receive locks dataset and its descendents
+        // The task group below finishes datasets in whatever order they complete; sorting makes the
+        // run order (and every log of it) the same each night, parents first.
+        let datasets = try await datasets().sorted { $0.dataset < $1.dataset }
         // https://docs.oracle.com/cd/E18752_01/html/819-5461/gbchx.html
         for dataset in datasets {
             if config.pruneRemoteSnapshots {
@@ -47,14 +50,90 @@ public struct Syncer: Sendable {
                     ).get()
                 }
             }
-            for snapshotToSend in dataset.snapshotsLocalToSend {
+            guard let newest = dataset.snapshotsToSend.last else { continue }
+            for step in Self.sendSteps(base: dataset.base, owed: dataset.snapshotsToSend) {
                 _ = try await shell.execute(
-                    sendCommand(for: snapshotToSend, sendRateLimitPipe: sendRateLimitPipe),
+                    sendCommand(for: step, sendRateLimitPipe: sendRateLimitPipe),
                     dryRun: !config.execute
                 ).get()
-                try await advanceBookmark(to: snapshotToSend.this)
             }
+            // Once per dataset, after every step landed. A step that fails throws before this, so
+            // the bookmark never claims a snapshot the destination does not hold; the next run then
+            // starts from whatever the destination does hold (its newest common snapshot).
+            try await advanceBookmark(to: newest)
         }
+    }
+
+    /// One `zfs send … | zfs recv -F …` pipeline of a dataset's sync.
+    struct SendStep: Equatable {
+        enum Kind: Equatable {
+            /// `zfs send <to>` — the destination has nothing to build on.
+            case full
+            /// `zfs send -i <from> <to>` — one snapshot's delta; `from` may be a bookmark.
+            case incremental
+            /// `zfs send -I <from> <to>` — every snapshot between the two, as ONE stream.
+            /// ZFS requires `from` to be a snapshot here, never a bookmark.
+            case intermediary
+        }
+        let kind: Kind
+        /// The snapshot or bookmark the stream builds on; nil for a full send.
+        let from: String?
+        let to: SnapshotRecord
+    }
+
+    /// The streams that carry `owed` (a dataset's local snapshots newer than `base`, ascending by
+    /// createtxg) to the destination — at most two, however many snapshots are owed.
+    ///
+    /// Why at most two: each send is a round trip of fixed cost (an `ssh`, a `zfs recv`, a pipe
+    /// setup), and the NAS→serverMTB leg's forwarded subtree owes ~96 hourly snapshots a day. One
+    /// send per snapshot at ~33 s each filled the leg's one-hour budget from 2026-09-28 until
+    /// 2026-10-04 (bourgeois_concern `nas-backup-mtb-leg-completes`).
+    ///
+    /// - a snapshot base: one `-i` for a single owed snapshot, else one `-I base newest`;
+    /// - a bookmark base: `-i bookmark first`, then `-I first newest` (`-I` cannot start at a
+    ///   bookmark);
+    /// - no base: a full send of the first, then `-I first newest`.
+    ///
+    /// `-I` sends every snapshot the source holds between its two ends, which equals `owed` only
+    /// when `owed` is that whole run — which is how `datasets()` builds it. That is asserted rather
+    /// than assumed (`isContiguous`); an owed list that is not provably the run falls back to one
+    /// `-i` per snapshot, the pre-2.2.0 behaviour, which is correct for any list.
+    static func sendSteps(base: SnapshotBase?, owed: [SnapshotRecord]) -> [SendStep] {
+        guard let first = owed.first, let newest = owed.last else { return [] }
+        guard isContiguous(owed, after: base) else {
+            return perSnapshotSteps(base: base, owed: owed)
+        }
+        if let base, !base.isBookmark {
+            return [
+                SendStep(kind: owed.count == 1 ? .incremental : .intermediary, from: base.name, to: newest)
+            ]
+        }
+        let firstStep = SendStep(kind: base == nil ? .full : .incremental, from: base?.name, to: first)
+        guard owed.count > 1 else { return [firstStep] }
+        return [firstStep, SendStep(kind: .intermediary, from: first.name, to: newest)]
+    }
+
+    /// One send per owed snapshot, each from the one before it — what every sync did before 2.2.0.
+    static func perSnapshotSteps(base: SnapshotBase?, owed: [SnapshotRecord]) -> [SendStep] {
+        var previous = base?.name
+        return owed.map { snapshot in
+            defer { previous = snapshot.name }
+            return SendStep(kind: previous == nil ? .full : .incremental, from: previous, to: snapshot)
+        }
+    }
+
+    /// Whether `owed` is one dataset's snapshots in strictly increasing createtxg, all newer than
+    /// `base` — the precondition for `-I` sending exactly `owed`.
+    static func isContiguous(_ owed: [SnapshotRecord], after base: SnapshotBase?) -> Bool {
+        guard let dataset = owed.first?.dataset else { return true }
+        var previousCreatetxg = base?.createtxg
+        for snapshot in owed {
+            guard snapshot.dataset == dataset else { return false }
+            if let previousCreatetxg, snapshot.createtxg <= previousCreatetxg { return false }
+            previousCreatetxg = snapshot.createtxg
+        }
+        if let base, base.dataset != dataset { return false }
+        return true
     }
 
     private func advanceBookmark(to snapshot: SnapshotRecord) async throws {
@@ -83,19 +162,23 @@ public struct Syncer: Sendable {
         ).get()
     }
 
-    private func sendCommand(for snapshotToSend: SendSnapshot, sendRateLimitPipe: String?) -> String
-    {
+    private func sendCommand(for step: SendStep, sendRateLimitPipe: String?) -> String {
         var zfsSend = "zfs send -v"
-        if let previousSnapshot = snapshotToSend.previous {
-            zfsSend += " -i \(previousSnapshot.name.shellQuoted)"
+        if let from = step.from {
+            zfsSend += step.kind == .intermediary ? " -I " : " -i "
+            zfsSend += from.shellQuoted
         }
-        zfsSend += " \(snapshotToSend.this.name.shellQuoted)"
+        zfsSend += " \(step.to.name.shellQuoted)"
 
+        // A single-snapshot stream lands as the named snapshot. A multi-snapshot (`-I`) stream must
+        // name the DATASET: ZFS refuses a snapshot name for it ("cannot specify snapshot name for
+        // multi-snapshot stream"), and each snapshot in it arrives under its own name.
+        let receiveTarget = step.kind == .intermediary ? step.to.dataset : step.to.name
         var command = "set -o pipefail; \(zfsSend)"
         if let sendRateLimitPipe {
             command += " | \(sendRateLimitPipe)"
         }
-        command += " | \(remote("zfs recv -F \(forwardPath(snapshotToSend.this.name).shellQuoted)"))"
+        command += " | \(remote("zfs recv -F \(forwardPath(receiveTarget).shellQuoted)"))"
         return command
     }
 
@@ -177,6 +260,8 @@ public struct Syncer: Sendable {
                     let base = [mostRecentCommonSnapshot, bookmarkBase]
                         .compactMap { $0 }
                         .max { $0.createtxg < $1.createtxg }
+                    // Ascending createtxg (the sort above), every snapshot newer than the base: the
+                    // whole run `sendSteps` may hand to one `-I`.
                     let snapshotsLocalAfterLastCommonRemote = snapshotsLocalForDataset.filter {
                         guard let base else { return true }
                         return $0.createtxg > base.createtxg
@@ -187,22 +272,10 @@ public struct Syncer: Sendable {
                         }
                         return $0.remote
                     }
-                    var snapshotsLocalAfterLastCommonRemoteIndex = 0
                     return DatasetSnapshotOperation(
-                        snapshotsLocalToSend: snapshotsLocalAfterLastCommonRemote.map {
-                            thisSnapshot in
-                            let send = SendSnapshot(
-                                this: thisSnapshot,
-                                previous: snapshotsLocalAfterLastCommonRemoteIndex == .zero
-                                    ? base
-                                    : // snapshotsLocalAfterLastCommonRemote sorted ascending createtxg
-                                    SnapshotBase(
-                                        record: snapshotsLocalAfterLastCommonRemote[
-                                            snapshotsLocalAfterLastCommonRemoteIndex - 1])
-                            )
-                            snapshotsLocalAfterLastCommonRemoteIndex += 1
-                            return send
-                        },
+                        dataset: dataset,
+                        base: base,
+                        snapshotsToSend: snapshotsLocalAfterLastCommonRemote,
                         snapshotsRemoteToDelete: snapshotsRemoteDeletedFromLocal
                     )
                 }
@@ -445,7 +518,11 @@ extension Syncer {
     }
 
     private struct DatasetSnapshotOperation {
-        let snapshotsLocalToSend: [SendSnapshot]
+        let dataset: String
+        /// The newest snapshot or bookmark the destination already holds, if any.
+        let base: SnapshotBase?
+        /// Local snapshots newer than `base`, ascending by createtxg.
+        let snapshotsToSend: [SnapshotRecord]
         let snapshotsRemoteToDelete: [SnapshotRecord]
     }
 
@@ -454,12 +531,7 @@ extension Syncer {
         let remote: SnapshotRecord
     }
 
-    private struct SendSnapshot {
-        let this: SnapshotRecord
-        let previous: SnapshotBase?
-    }
-
-    private struct SnapshotBase {
+    struct SnapshotBase: Equatable {
         let guid: String
         let createtxg: UInt64
         let name: String
@@ -468,6 +540,14 @@ extension Syncer {
             guid = record.guid
             createtxg = record.createtxg
             name = record.name
+        }
+
+        /// A bookmark is named `dataset#name`, a snapshot `dataset@name`.
+        var isBookmark: Bool { name.contains("#") }
+
+        /// The dataset the base belongs to — its name up to the `#` or `@`.
+        var dataset: String {
+            String(name.prefix { $0 != "#" && $0 != "@" })
         }
     }
 }
