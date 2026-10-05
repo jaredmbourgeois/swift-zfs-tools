@@ -6,6 +6,8 @@ on:
   push:
     branches: ['**']
   pull_request:
+  # A manual run from the Actions tab, for a commit pushed before Actions was enabled on the repo.
+  workflow_dispatch:
 
 jobs:
   test:
