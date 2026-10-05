@@ -16,7 +16,8 @@ jobs:
     # not something this job installs. Package.swift resolves swift-shell from its GitHub mirror at
     # an exact tag, so this job is green only once that tag is mirrored (workstation
     # `oss-github-mirror-path`) — the same gate the fleet build has.
-    runs-on: debian-13:host
+    # The runner's label is `debian-13:host`; a job names the label without its `:host` schema suffix.
+    runs-on: debian-13
     steps:
       - uses: actions/checkout@v4
       - run: swift --version
