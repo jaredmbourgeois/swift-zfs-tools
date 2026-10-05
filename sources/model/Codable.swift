@@ -36,9 +36,10 @@ public func encode<T: Encodable>(
     jsonEncoder: JSONEncoder
 ) throws {
     let path = path.lowercased().contains(".json") ? path : path + ".json"
-    let currentFormatting = jsonEncoder.outputFormatting
-    defer { jsonEncoder.outputFormatting = currentFormatting }
-    jsonEncoder.outputFormatting = jsonEncoder.outputFormatting.union(.prettyPrinted)
+    // `JSONEncoder` is a class, so this is the caller's encoder: pretty-print for this write only.
+    let callerFormatting = jsonEncoder.outputFormatting
+    defer { jsonEncoder.outputFormatting = callerFormatting }
+    jsonEncoder.outputFormatting = callerFormatting.union(.prettyPrinted)
     let data: Data
     do {
         data = try jsonEncoder.encode(encodable)

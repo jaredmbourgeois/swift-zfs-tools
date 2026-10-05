@@ -58,9 +58,6 @@ public enum ErrorType: Error, CustomDebugStringConvertible {
         .shellFailure(command: command, location: location(file: file, function: function, line: line))
     }
 
-    /// `path` couldn't be formed into a valid URL.
-    case urlInvalid(path: String, location: String)
-
     /// Writing to `url` failed.
     case writeToURL(_ url: URL, error: any Error, location: String)
     public static func writeToURL(_ url: URL, error: any Error, file: String = #file, function: String = #function, line: Int = #line) -> Self {
@@ -73,11 +70,10 @@ public enum ErrorType: Error, CustomDebugStringConvertible {
     case .dateFromString(let string, let format, let location): "Date formatted as \(format) could not be parsed from \(string), from \(location)."
     case .fileNotFound(let path, let location): "File not found at \(path), from \(location)."
     case .invalidArgument(let name, let value, let reason, let location): "Invalid argument \(name)=\(value): \(reason), from \(location)."
-    case .jsonDecodeFailed(let type, let error, let path, let location): "Could not DEcode \(type) at \(path), from \(location); \(String(reflecting: error))"
-    case .jsonEncodeFailed(let type, let error, let path, let location): "Could not ENcode \(type) to \(path), from \(location); \(String(reflecting: error))"
+    case .jsonDecodeFailed(let type, let error, let path, let location): "Could not decode \(type) at \(path), from \(location); \(String(reflecting: error))"
+    case .jsonEncodeFailed(let type, let error, let path, let location): "Could not encode \(type) to \(path), from \(location); \(String(reflecting: error))"
     case .shellError(let command, let error, let location): "Shell command (\(command)), returned error (\(error)), from \(location)"
     case .shellFailure(let command, let location): "Shell command (\(command)), returned failure from \(location)."
-    case .urlInvalid(let path, let location): "Invalid URL for \(path), from \(location)."
     case .writeToURL(let url, let error, let location): "Write to URL \(url), from \(location); \(String(reflecting: error))."
     }
     }

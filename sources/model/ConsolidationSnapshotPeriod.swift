@@ -43,6 +43,41 @@ extension Consolidator {
     }
 }
 
+extension Consolidator.SnapshotConsolidationPeriod {
+    /// Rejects a zero `everyMultiple` or `snapshots` at decode time: the schedule math would
+    /// otherwise spin forever (`everyMultiple: 0` never advances the window backward) or crash
+    /// on a malformed range (`snapshots: 0` yields an invalid `1...0` interval).
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let everyMultiple = try container.decode(UInt16.self, forKey: .everyMultiple)
+        let everyPeriod = try container.decode(Consolidator.SnapshotConsolidationPeriodType.self, forKey: .everyPeriod)
+        let snapshots = try container.decode(UInt16.self, forKey: .snapshots)
+        let repetitions = try container.decodeIfPresent(UInt16.self, forKey: .repetitions)
+        guard everyMultiple > 0 else {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: container.codingPath,
+                    debugDescription: "everyMultiple must be at least 1"
+                )
+            )
+        }
+        guard snapshots > 0 else {
+            throw DecodingError.dataCorrupted(
+                .init(
+                    codingPath: container.codingPath,
+                    debugDescription: "snapshots must be at least 1"
+                )
+            )
+        }
+        self.init(
+            everyMultiple: everyMultiple,
+            everyPeriod: everyPeriod,
+            snapshots: snapshots,
+            repetitions: repetitions
+        )
+    }
+}
+
 extension Consolidator.SnapshotConsolidationSchedule {
     /// Fluent builder for a schedule. Chain `keepingSnapshots(…)` for finite bands, then finish with
     /// `build()` or `buildIndefinitelyKeepingSnapshots(…)` for the open-ended tail (e.g. yearly forever).

@@ -48,6 +48,39 @@ final class ConsolidatorConfigTest: XCTestCase {
             try decodeResourceJSON(named: "ConsolidatorConfigNoUpperBound", fileManager: fileManager, jsonDecoder: decoder)
         )
     }
+
+    // MARK: - Period decode validation
+
+    func testPeriodDecodeRejectsZeroEveryMultiple() throws {
+        let json = #"{"everyMultiple":0,"everyPeriod":"days","repetitions":7,"snapshots":1}"#
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(Consolidator.SnapshotConsolidationPeriod.self, from: json.data(using: .utf8)!)
+        ) { error in
+            guard case DecodingError.dataCorrupted = error else {
+                return XCTFail("expected DecodingError.dataCorrupted, got \(error)")
+            }
+        }
+    }
+
+    func testPeriodDecodeRejectsZeroSnapshots() throws {
+        let json = #"{"everyMultiple":1,"everyPeriod":"days","repetitions":7,"snapshots":0}"#
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(Consolidator.SnapshotConsolidationPeriod.self, from: json.data(using: .utf8)!)
+        ) { error in
+            guard case DecodingError.dataCorrupted = error else {
+                return XCTFail("expected DecodingError.dataCorrupted, got \(error)")
+            }
+        }
+    }
+
+    func testPeriodDecodeAcceptsValidValuesWithoutRepetitions() throws {
+        let json = #"{"everyMultiple":2,"everyPeriod":"weeks","snapshots":3}"#
+        let period = try JSONDecoder().decode(Consolidator.SnapshotConsolidationPeriod.self, from: json.data(using: .utf8)!)
+        XCTAssertEqual(2, period.everyMultiple)
+        XCTAssertEqual(.weeks, period.everyPeriod)
+        XCTAssertEqual(3, period.snapshots)
+        XCTAssertNil(period.repetitions)
+    }
 }
 
 extension ConsolidatorConfigTest {

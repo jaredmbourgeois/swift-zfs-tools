@@ -1,0 +1,21 @@
+name: CI
+
+# Branches only: a tag names a commit a branch push already built, and a tag is cut only on a
+# commit whose jobs read green (forgejo-task-status.sh, per job).
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  test:
+    # The fleet's ci-forgejo runner (serverJMB; a Debian 13 nspawn machine in host mode). Swift is
+    # the runner's prewarmed toolchain (~/workstation scripts/provision/setup_forgejo_actions_runner.sh),
+    # not something this job installs. Package.swift resolves swift-shell from its GitHub mirror at
+    # an exact tag, so this job is green only once that tag is mirrored (workstation
+    # `oss-github-mirror-path`) — the same gate the fleet build has.
+    runs-on: debian-13:host
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift --version
+      - run: swift test

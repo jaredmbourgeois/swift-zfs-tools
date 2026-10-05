@@ -286,6 +286,6 @@ A consolidate config wraps the [schedule](#retention) shown above plus `datasetG
 
 ## License
 
-Apache License v2.0 with Runtime Library Exception.
+Copyright © 2025 Jared Bourgeois — Apache License v2.0 with Runtime Library Exception.
 
 Donations are welcome — BTC `3ACMiYCiknTp4VoSE9Zxc2JnaxmDAMGBqH` · ETH `0xD97F48B5Ab68285c58BD1D11dE87a166A7C4D0b0` · SOL `LW3j5Zv54a8qD7dzZ5KdpfE6UssFAGj48uM1DhJCeSN`

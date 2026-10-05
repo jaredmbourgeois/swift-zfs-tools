@@ -162,8 +162,12 @@ final class PoolUtilizationTest: XCTestCase {
     // MARK: - Dry-run + threshold does not throw (regression)
 
     func testSnapshotDryRunWithThresholdDoesNotThrow() async throws {
-        // dry-run (execute: false, the default) + a pool threshold must print the plan, not error.
-        // swift-shell echoes commands in dry-run, which the fail-loud pool parser must tolerate.
+        // dry-run (execute: false, the default) + a pool threshold must print the full plan, not
+        // error: the threshold check is skipped in dry-run (nothing is created or destroyed), so
+        // no pool query runs and the echoed command text never reaches the fail-loud parser.
+        let snapshotShouldBeCalled = expectation(description: "snapshot command should be printed")
+        let poolQueryShouldNotBeCalled = expectation(description: "pool query should not run")
+        poolQueryShouldNotBeCalled.isInverted = true
         let shell = ShellAtPath {
             @Sendable (
                 _ command: ShellCommand,
@@ -174,7 +178,12 @@ final class PoolUtilizationTest: XCTestCase {
                 _ stream: ShellStream?,
                 _ timeout: TimeInterval?
             ) async -> ShellResult in
-            .success(stdout: command)!
+            if command.contains("zpool list") || command.contains("zfs list -Hp") {
+                poolQueryShouldNotBeCalled.fulfill()
+            } else if command.contains("zfs snapshot") {
+                snapshotShouldBeCalled.fulfill()
+            }
+            return .success(stdout: command)!
         }
         let config = Snapshotter.Config(
             datasetGrep: "tank/data",
@@ -192,6 +201,7 @@ final class PoolUtilizationTest: XCTestCase {
             shell: shell
         )
         try await snapshotter.snapshot()
+        await fulfillment(of: [snapshotShouldBeCalled, poolQueryShouldNotBeCalled], timeout: timeout)
     }
 
     // MARK: - Snapshot skips when over threshold

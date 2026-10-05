@@ -83,7 +83,7 @@ public struct Consolidator: Sendable {
                         return []
                     }
 
-                    let (upperBound, dateRangeAndSnapshotCounts) = try dateRangeAndShapshotCounts(snapshotDateEarliest: snapshotDateEarliest)
+                    let (upperBound, dateRangeAndSnapshotCounts) = try dateRangeAndSnapshotCounts(snapshotDateEarliest: snapshotDateEarliest)
 
                     var snapshotAndDatesToKeepBySnapshot = [String: SnapshotAndDate]()
                     for snapshotAndDate in snapshotAndDatesForDataset {
@@ -144,12 +144,13 @@ public struct Consolidator: Sendable {
                 dryRun: !config.execute
             ).get()
         }
-        if config.maxPoolUtilizationPercent != nil || config.minFreeBytes != nil,
+        if config.execute,
+           config.maxPoolUtilizationPercent != nil || config.minFreeBytes != nil,
            let pool = PoolUtilization.poolName(from: config.datasetGrep) {
             let utilization = try await PoolUtilization.query(
                 pool: pool,
                 shell: shell,
-                dryRun: !config.execute,
+                dryRun: false,
                 stringEncoding: config.stringEncoding,
                 lineSeparator: config.lineSeparator
             )
@@ -196,7 +197,7 @@ public struct Consolidator: Sendable {
             let utilization = try await PoolUtilization.query(
                 pool: pool,
                 shell: shell,
-                dryRun: !config.execute,
+                dryRun: false,
                 stringEncoding: config.stringEncoding,
                 lineSeparator: config.lineSeparator
             )
@@ -224,9 +225,9 @@ public struct Consolidator: Sendable {
         try? dateFormatter.dateForSnapshot(snapshot, dateSeparator: config.dateSeparator)
     }
 
-    private func dateRangeAndShapshotCounts(
+    private func dateRangeAndSnapshotCounts(
         snapshotDateEarliest: Date
-    ) throws -> (upperBound: Date, dateRangeAndShapshotCounts: [DateRangeAndSnapshotCount]) {
+    ) throws -> (upperBound: Date, dateRangeAndSnapshotCounts: [DateRangeAndSnapshotCount]) {
         let upperBound: Date = try {
             if let upperBound = config.schedule.upperBound {
                 guard let date = dateFormatter.date(from: upperBound) else {

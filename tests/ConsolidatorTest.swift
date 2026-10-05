@@ -407,4 +407,76 @@ final class ConsolidatorTest: XCTestCase {
         try await consolidator.consolidate()
         await fulfillment(of: [expectDestroy20220801, expectDestroy20220805, expectManualIsNotDestroyed], timeout: timeout)
     }
+
+    /// The post-consolidation pool-utilization threshold check must not run in dry-run: a
+    /// dry-run report prints the plan without querying pool state. Any pool query command
+    /// reaches the `default` branch and fails the test.
+    func testConsolidateDryRunWithThresholdDoesNotQueryPool() async throws {
+        let expectDestroy20220729 = expectation(description: "expect destroy 20220729")
+        let expectDestroy20220801 = expectation(description: "expect destroy 20220801")
+        let expectDestroy20220805 = expectation(description: "expect destroy 20220805")
+        let config = Consolidator.Config(
+            datasetGrep: "nas_12tb/nas/",
+            dateSeparator: "@",
+            execute: false,
+            lineSeparator: "\n",
+            maxPoolUtilizationPercent: 80,
+            schedule: .Builder(upperBound: testDateString)
+                .keepingSnapshots(1, every: 1, .weeks, repeatedBy: 1)
+                .build(),
+            snapshotsNotConsolidated: [],
+            stringEncoding: .utf8
+        )
+        let shell = ShellAtPath { @Sendable (
+            _ command: ShellCommand,
+            _ dryRun: Bool,
+            _ estimatedOutputSize: Int?,
+            _ estimatedErrorSize: Int?,
+            _ statusesForResult: ShellTermination.StatusesForResult,
+            _ stream: ShellStream?,
+            _ timeout: TimeInterval?
+        ) async -> ShellResult in
+            switch command {
+            case "zfs list -o name -H | grep 'nas_12tb/nas/' || true":
+                return .success(stdout: "nas_12tb/nas/documents")!
+            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas/' || true":
+                return .success(
+                    stdout: """
+                    nas_12tb/nas/documents@20220805-000000
+                    nas_12tb/nas/documents@20220803-000000
+                    nas_12tb/nas/documents@20220801-000000
+                    nas_12tb/nas/documents@20220729-000000
+                    """
+                )!
+            case "zfs destroy 'nas_12tb/nas/documents@20220729-000000'":
+                expectDestroy20220729.fulfill()
+                return .success()
+            case "zfs destroy 'nas_12tb/nas/documents@20220801-000000'":
+                expectDestroy20220801.fulfill()
+                return .success()
+            case "zfs destroy 'nas_12tb/nas/documents@20220805-000000'":
+                expectDestroy20220805.fulfill()
+                return .success()
+            default:
+                XCTFail("unexpected command: \(command)")
+                return .success()
+            }
+        }
+        let consolidator = Consolidator(
+            calendar: calendar,
+            config: config,
+            date: { [testDate] in testDate },
+            dateFormatter: dateFormatter,
+            shell: shell
+        )
+        try await consolidator.consolidate()
+        await fulfillment(
+            of: [
+                expectDestroy20220729,
+                expectDestroy20220801,
+                expectDestroy20220805
+            ],
+            timeout: timeout
+        )
+    }
 }

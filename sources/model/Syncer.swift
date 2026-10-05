@@ -95,8 +95,7 @@ public struct Syncer: Sendable {
         if let sendRateLimitPipe {
             command += " | \(sendRateLimitPipe)"
         }
-        command +=
-            " | \(sshLogin) zfs recv -F \(forwardPath(snapshotToSend.this.name).shellQuoted)"
+        command += " | \(remote("zfs recv -F \(forwardPath(snapshotToSend.this.name).shellQuoted)"))"
         return command
     }
 
@@ -119,9 +118,15 @@ public struct Syncer: Sendable {
             lineSeparator: config.lineSeparator
         )
         // Remote datasets carry the path transform; grep with the transformed pattern so the
-        // remote-side `zfs list ... | grep` actually matches.
+        // remote-side `zfs list` output actually matches. The grep runs locally, outside the
+        // quoted ssh argument (see `remote`) — the remote shell only ever sees the bare listing,
+        // which is the exact shape `ReceiveGuardPolicy` whitelists.
+        var remoteSnapshotRecordsListCommand = remote(ZFS.listSnapshotRecords())
+        if let remoteDatasetGrep {
+            remoteSnapshotRecordsListCommand += " | grep \(remoteDatasetGrep.shellQuoted) || true"
+        }
         async let snapshotsRemoteRawBinding: [String] = try await shell.lines(
-            remote(ZFS.listSnapshotRecords(grepping: remoteDatasetGrep)),
+            remoteSnapshotRecordsListCommand,
             dryRun: !config.execute,
             encoding: config.stringEncoding,
             lineSeparator: config.lineSeparator
@@ -136,14 +141,13 @@ public struct Syncer: Sendable {
             snapshotsRemoteRawBinding
         )
         let listLocalCommand = ZFS.listSnapshotRecords(grepping: config.datasetGrep)
-        let listRemoteCommand = remote(ZFS.listSnapshotRecords(grepping: remoteDatasetGrep))
         let snapshotsLocalRecords = try snapshotsLocal.map {
             try SnapshotRecord.parse($0, command: listLocalCommand)
         }
         // Reverse-transform remote snapshot names into local form so all internal comparisons
         // run in a single namespace. Forward-transform happens at the wire boundary in sync().
         let snapshotsRemoteRecords = try snapshotsRemoteRaw.map { line in
-            let record = try SnapshotRecord.parse(line, command: listRemoteCommand)
+            let record = try SnapshotRecord.parse(line, command: remoteSnapshotRecordsListCommand)
             return RemoteSnapshotRecord(local: record.withName(reversePath(record.name)), remote: record)
         }
         let bookmarksLocalRecords = try await listBookmarkRecords()
@@ -214,20 +218,15 @@ public struct Syncer: Sendable {
 
     /// Prefixes `command` with the ssh login so it runs on the remote host.
     ///
-    /// Two deliberate properties:
-    /// - **Quoting depth.** Interpolated values are single-quoted for the *local* shell. `ssh` then
-    ///   re-parses the command on the *remote* shell, so a value containing spaces/metacharacters
-    ///   would be re-split remotely (single-level quoting only). This is safe because ZFS
-    ///   dataset/snapshot names can't contain such characters (OpenZFS naming rules); we don't
-    ///   double-quote.
-    /// - **Local pipe.** When `command` contains `… | grep … || true` (the list builders), the pipe
-    ///   is interpreted by the *local* shell — the remote `zfs list` streams to a local `grep`. That
-    ///   is intentional; wrapping the whole remote command in quotes would move the grep remote-side.
-    ///   `ReceiveGuardPolicy` depends on this: it exact-matches the bare `zfs list -t snapshot ...`
-    ///   a receiver sees. Pushing the grep remote-side would make SSH_ORIGINAL_COMMAND
-    ///   `zfs list … | grep …`, which the guard rejects — silently breaking every guarded sync.
+    /// The remote command line becomes one locally-quoted argument (`shellQuoted`), so the *remote*
+    /// shell receives exactly the intended command line: dataset/snapshot names with spaces (legal
+    /// in ZFS) reach `zfs` intact instead of being re-split by the remote shell, and the local
+    /// shell can't word-split or glob any part of the command. Pass only the bare remote command —
+    /// a local pipeline (e.g. `| grep … || true`) must stay outside the quotes, appended by the
+    /// caller. `ReceiveGuardPolicy` depends on the bare form: it whitelists the exact
+    /// `SSH_ORIGINAL_COMMAND` strings a guarded receiver sees.
     private func remote(_ command: String) -> String {
-        "\(sshLogin) \(command)"
+        "\(sshLogin) \(command.shellQuoted)"
     }
 
     /// Forward-transform a local-form path/snapshot to its remote-form equivalent.

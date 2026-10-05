@@ -72,6 +72,20 @@ final class ReceiveGuardTest: XCTestCase {
         )
     }
 
+    func testAllowsRecvIntoSpacedDataset() {
+        XCTAssertEqual(
+            try policy.validate("zfs recv -F 'nas_12tb/nas/my data@20260506-014625'").get(),
+            ["zfs", "recv", "-F", "nas_12tb/nas/my data@20260506-014625"]
+        )
+    }
+
+    func testAllowsDestroySnapshotInSpacedDataset() {
+        XCTAssertEqual(
+            try policy.validate("zfs destroy 'nas_12tb/nas/my data@20260506-014625'").get(),
+            ["zfs", "destroy", "nas_12tb/nas/my data@20260506-014625"]
+        )
+    }
+
     // MARK: - rejections
 
     func testRejectsEmpty() {

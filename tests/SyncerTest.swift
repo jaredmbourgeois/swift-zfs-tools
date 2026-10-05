@@ -52,7 +52,7 @@ final class SyncerTest: XCTestCase {
                     "nas_12tb/nas/documents-alt@20220805-000000",
                     "nas_12tb/nas/documents-alt@20220801-000000",
                 ]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecordOutput([
                     "nas_12tb/nas/documents@20220804-000000",
                     "nas_12tb/nas/documents@20220803-000000",
@@ -61,19 +61,19 @@ final class SyncerTest: XCTestCase {
                     "nas_12tb/nas/documents-alt@20220803-000000",
                     "nas_12tb/nas/documents-alt@20220801-000000",
                 ]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents@20220804-000000'":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs destroy '\\''nas_12tb/nas/documents@20220804-000000'\\'''":
                 expectDelete20220804.fulfill()
                 return .success()
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents@20220802-000000'":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs destroy '\\''nas_12tb/nas/documents@20220802-000000'\\'''":
                 expectDelete20220802.fulfill()
                 return .success()
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents-alt@20220803-000000'":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs destroy '\\''nas_12tb/nas/documents-alt@20220803-000000'\\'''":
                 expectDeleteAlt20220803.fulfill()
                 return .success()
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220803-000000' 'nas_12tb/nas/documents@20220805-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220805-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220803-000000' 'nas_12tb/nas/documents@20220805-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220805-000000'\\'''":
                 expectSend20220805.fulfill()
                 return .success()
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents-alt@20220801-000000' 'nas_12tb/nas/documents-alt@20220805-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents-alt@20220805-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents-alt@20220801-000000' 'nas_12tb/nas/documents-alt@20220805-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents-alt@20220805-000000'\\'''":
                 expectSendAlt20220805.fulfill()
                 return .success()
             default:
@@ -133,15 +133,15 @@ final class SyncerTest: XCTestCase {
                     "nas_12tb/nas/documents@20220803-000000",
                     "nas_12tb/nas/documents@20220801-000000",
                 ]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecordOutput([
                     "nas_12tb/nas/documents@20220805-000000",
                     "nas_12tb/nas/documents@20220801-000000",
                 ]))!
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220806-000000'\\'''":
                 expectSend20220806.fulfill()
                 return .success()
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220807-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220807-000000'\\'''":
                 expectSend20220807.fulfill()
                 return .success()
             default:
@@ -201,23 +201,23 @@ final class SyncerTest: XCTestCase {
                     "nas_12tb/nas/documents@20220803-000000",
                     "nas_12tb/nas/documents@20220801-000000",
                 ]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecordOutput([
                     "nas_12tb/nas/documents@20220804-000000",
                     "nas_12tb/nas/documents@20220803-000000",
                     "nas_12tb/nas/documents@20220802-000000",
                     "nas_12tb/nas/documents@20220801-000000",
                 ]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents@20220804-000000'":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs destroy '\\''nas_12tb/nas/documents@20220804-000000'\\'''":
                 expectDelete20220804.fulfill()
                 return .success()
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents@20220802-000000'":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs destroy '\\''nas_12tb/nas/documents@20220802-000000'\\'''":
                 expectDelete20220802.fulfill()
                 return .success()
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220803-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220803-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220806-000000'\\'''":
                 expectSend20220806.fulfill()
                 return .success()
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220807-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220807-000000'\\'''":
                 expectSend20220807.fulfill()
                 return .success()
             default:
@@ -267,9 +267,9 @@ final class SyncerTest: XCTestCase {
                     "nas_12tb/nas/documents@20220806-000000",
                     "nas_12tb/nas/documents@20220805-000000",
                 ]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecordOutput(["nas_12tb/nas/documents@20220805-000000"]))!
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220806-000000'\\'''":
                 expectSend20220806.fulfill()
                 return .success()
             default:
@@ -302,9 +302,9 @@ final class SyncerTest: XCTestCase {
                     "nas_12tb/nas/documents@20220806-000000",
                     "nas_12tb/nas/documents@20220805-000000",
                 ]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecordOutput(["nas_12tb/nas/documents@20220805-000000"]))!
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | pv -q -L '20M' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | pv -q -L '20M' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220806-000000'\\'''":
                 expectThrottledSend.fulfill()
                 return .success()
             default:
@@ -392,9 +392,9 @@ final class SyncerTest: XCTestCase {
                     "nas_12tb/nas/documents@20220806-000000",
                     "nas_12tb/nas/documents@20220805-000000",
                 ]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'pool_b/backups/nas_12tb/nas' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'pool_b/backups/nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecord(snapshotGuid("nas_12tb/nas/documents@20220805-000000"), snapshotCreatetxg("nas_12tb/nas/documents@20220805-000000"), "pool_b/backups/nas_12tb/nas/documents@20220805-000000"))!
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'pool_b/backups/nas_12tb/nas/documents@20220806-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''pool_b/backups/nas_12tb/nas/documents@20220806-000000'\\'''":
                 expectSend20220806.fulfill()
                 return .success()
             default:
@@ -435,9 +435,9 @@ final class SyncerTest: XCTestCase {
                     "pool_b/backups/nas_12tb/nas/documents@20220806-000000",
                     "pool_b/backups/nas_12tb/nas/documents@20220805-000000",
                 ]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecord(snapshotGuid("pool_b/backups/nas_12tb/nas/documents@20220805-000000"), snapshotCreatetxg("pool_b/backups/nas_12tb/nas/documents@20220805-000000"), "nas_12tb/nas/documents@20220805-000000"))!
-            case "set -o pipefail; zfs send -v -i 'pool_b/backups/nas_12tb/nas/documents@20220805-000000' 'pool_b/backups/nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
+            case "set -o pipefail; zfs send -v -i 'pool_b/backups/nas_12tb/nas/documents@20220805-000000' 'pool_b/backups/nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220806-000000'\\'''":
                 expectSend20220806.fulfill()
                 return .success()
             default:
@@ -477,9 +477,9 @@ final class SyncerTest: XCTestCase {
                     "nas_pool/archive/source-pool/data@20220806-000000",
                     "nas_pool/archive/source-pool/data@20220805-000000",
                 ]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'backup_pool/source-pool' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'backup_pool/source-pool' || true":
                 return .success(stdout: snapshotRecord(snapshotGuid("nas_pool/archive/source-pool/data@20220805-000000"), snapshotCreatetxg("nas_pool/archive/source-pool/data@20220805-000000"), "backup_pool/source-pool/data@20220805-000000"))!
-            case "set -o pipefail; zfs send -v -i 'nas_pool/archive/source-pool/data@20220805-000000' 'nas_pool/archive/source-pool/data@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'backup_pool/source-pool/data@20220806-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_pool/archive/source-pool/data@20220805-000000' 'nas_pool/archive/source-pool/data@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''backup_pool/source-pool/data@20220806-000000'\\'''":
                 expectSend20220806.fulfill()
                 return .success()
             default:
@@ -520,12 +520,12 @@ final class SyncerTest: XCTestCase {
                     "nas_12tb/nas/documents@20220803-000000",
                     "nas_12tb/nas/documents@20220801-000000",
                 ]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'pool_b/backups/nas_12tb/nas' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'pool_b/backups/nas_12tb/nas' || true":
                 return .success(stdout: [
                     snapshotRecord(snapshotGuid("nas_12tb/nas/documents@20220805-000000"), snapshotCreatetxg("nas_12tb/nas/documents@20220805-000000"), "pool_b/backups/nas_12tb/nas/documents@20220805-000000"),
                     snapshotRecord(snapshotGuid("nas_12tb/nas/documents@20220803-000000"), snapshotCreatetxg("nas_12tb/nas/documents@20220803-000000"), "pool_b/backups/nas_12tb/nas/documents@20220803-000000"),
                 ].joined(separator: "\n"))!
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'pool_b/backups/nas_12tb/nas/documents@20220807-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''pool_b/backups/nas_12tb/nas/documents@20220807-000000'\\'''":
                 expectSend20220807.fulfill()
                 return .success()
             default:
@@ -561,12 +561,12 @@ final class SyncerTest: XCTestCase {
                 return .success(stdout: "nas_12tb/nas/documents")!
             case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecordOutput(["nas_12tb/nas/documents@20220806-000000"]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'pool_b/backups/nas_12tb/nas' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'pool_b/backups/nas_12tb/nas' || true":
                 return .success(stdout: [
                     snapshotRecord(snapshotGuid("nas_12tb/nas/documents@20220806-000000"), snapshotCreatetxg("nas_12tb/nas/documents@20220806-000000"), "pool_b/backups/nas_12tb/nas/documents@20220806-000000"),
                     snapshotRecord(snapshotGuid("pool_b/backups/nas_12tb/nas/documents@20220804-000000"), snapshotCreatetxg("pool_b/backups/nas_12tb/nas/documents@20220804-000000"), "pool_b/backups/nas_12tb/nas/documents@20220804-000000"),
                 ].joined(separator: "\n"))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'pool_b/backups/nas_12tb/nas/documents@20220804-000000'":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs destroy '\\''pool_b/backups/nas_12tb/nas/documents@20220804-000000'\\'''":
                 expectDelete20220804.fulfill()
                 return .success()
             default:
@@ -595,7 +595,7 @@ final class SyncerTest: XCTestCase {
                 return .success(stdout: "nas_12tb/nas/documents")!
             case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecord("shared-guid", 10, "nas_12tb/nas/documents@manual-local"))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'pool_b/backups/nas_12tb/nas' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'pool_b/backups/nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecord("shared-guid", 10, "pool_b/backups/nas_12tb/nas/documents@received-remote"))!
             default:
                 XCTFail("matching GUID should not send or destroy despite different names: \(command)")
@@ -626,12 +626,12 @@ final class SyncerTest: XCTestCase {
                     "nas_12tb/nas/documents@20220806-000000",
                     "nas_12tb/nas/documents@20220805-000000",
                 ]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecordOutput([
                     "nas_12tb/nas/documents@20220805-000000",
                     "nas_12tb/nas/documents@20220804-000000",
                 ]))!
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220805-000000' 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220806-000000'\\'''":
                 expectSend20220806.fulfill()
                 return .success()
             default:
@@ -669,9 +669,9 @@ final class SyncerTest: XCTestCase {
                 return .success(stdout: "poolish/data")!
             case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'poolish/data' || true":
                 return .success(stdout: snapshotRecordOutput(["poolish/data@20220806-000000"]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'poolish/data' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'poolish/data' || true":
                 return .success(stdout: "")!
-            case "set -o pipefail; zfs send -v 'poolish/data@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'poolish/data@20220806-000000'":
+            case "set -o pipefail; zfs send -v 'poolish/data@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''poolish/data@20220806-000000'\\'''":
                 expectSend.fulfill()
                 return .success()
             default:
@@ -705,9 +705,9 @@ final class SyncerTest: XCTestCase {
                     snapshotRecord("received-guid", 20, "nas_12tb/nas/documents@20260705-220120"),
                     snapshotRecord("local-guid", 30, "nas_12tb/nas/documents@20260705-205519"),
                 ].joined(separator: "\n"))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecord("received-guid", 20, "nas_12tb/nas/documents@20260705-220120"))!
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20260705-220120' 'nas_12tb/nas/documents@20260705-205519' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20260705-205519'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20260705-220120' 'nas_12tb/nas/documents@20260705-205519' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20260705-205519'\\'''":
                 expectSendLatest.fulfill()
                 return .success()
             default:
@@ -747,11 +747,11 @@ final class SyncerTest: XCTestCase {
                 return .success(stdout: "nas_12tb/nas/documents")!
             case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecord("new-guid", 30, "nas_12tb/nas/documents@20220807-000000"))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecord("bookmark-guid", 20, "nas_12tb/nas/documents@20220805-000000"))!
             case "zfs list -t bookmark -H -p -o guid,createtxg,name -s createtxg | grep '#sent-serverMTB' || true":
                 return .success(stdout: snapshotRecord("bookmark-guid", 20, "nas_12tb/nas/documents#sent-serverMTB"))!
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents#sent-serverMTB' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220807-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents#sent-serverMTB' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220807-000000'\\'''":
                 expectSend.fulfill()
                 return .success()
             case "zfs destroy 'nas_12tb/nas/documents#sent-serverMTB.tmp' || true":
@@ -829,21 +829,21 @@ final class SyncerTest: XCTestCase {
                     "nas_12tb/nas/documents@20220807-000000",
                     "nas_12tb/nas/documents@20220806-000000",
                 ]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'nas_12tb/nas' || true":
                 return .success(stdout: snapshotRecordOutput([
                     "nas_12tb/nas/documents@20220805-000000",
                     "nas_12tb/nas/documents@20220801-000000",
                 ]))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents@20220801-000000'":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs destroy '\\''nas_12tb/nas/documents@20220801-000000'\\'''":
                 expectDelete20220801.fulfill()
                 return .success()
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs destroy 'nas_12tb/nas/documents@20220805-000000'":
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs destroy '\\''nas_12tb/nas/documents@20220805-000000'\\'''":
                 expectDelete20220805.fulfill()
                 return .success()
-            case "set -o pipefail; zfs send -v 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220806-000000'":
+            case "set -o pipefail; zfs send -v 'nas_12tb/nas/documents@20220806-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220806-000000'\\'''":
                 expectSend20220806.fulfill()
                 return .success()
-            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' zfs recv -F 'nas_12tb/nas/documents@20220807-000000'":
+            case "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents@20220806-000000' 'nas_12tb/nas/documents@20220807-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''nas_12tb/nas/documents@20220807-000000'\\'''":
                 expectSend20220807.fulfill()
                 return .success()
             default:
@@ -905,5 +905,57 @@ final class SyncerTest: XCTestCase {
         let syncer = Syncer(config: config, dateFormatter: dateFormatter, shell: shell)
         try await syncer.sync()
         await fulfillment(of: [expectQuotedSend], timeout: 1, enforceOrder: false)
+    }
+
+    /// A dataset name containing spaces is legal in ZFS. Each remote command line must reach the
+    /// remote shell as one quoted ssh argument, so `zfs destroy` / `zfs recv` receive the whole
+    /// spaced name as a single argument instead of a word-split one.
+    func testSyncHandlesDatasetNameWithSpace() async throws {
+        let config = SyncerConfigTest.syncConfig(datasetGrep: "tank/my data", execute: true)
+        let (expectDelete20220804, expectSend20220805) = (
+            expectation(description: "delete 20220804"),
+            expectation(description: "send 20220805")
+        )
+        let shell = ShellAtPath { @Sendable (
+            _ command: ShellCommand,
+            _ dryRun: Bool,
+            _ estimatedOutputSize: Int?,
+            _ estimatedErrorSize: Int?,
+            _ statusesForResult: ShellTermination.StatusesForResult,
+            _ stream: ShellStream?,
+            _ timeout: TimeInterval?
+        ) async -> ShellResult in
+            switch command {
+            case "zfs list -o name -H | grep 'tank/my data' || true":
+                return .success(stdout: "tank/my data")!
+            case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'tank/my data' || true":
+                return .success(stdout: snapshotRecordOutput(["tank/my data@20220805-000000"]))!
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'tank/my data' || true":
+                return .success(stdout: snapshotRecordOutput(["tank/my data@20220804-000000"]))!
+            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs destroy '\\''tank/my data@20220804-000000'\\'''":
+                expectDelete20220804.fulfill()
+                return .success()
+            case "set -o pipefail; zfs send -v 'tank/my data@20220805-000000' | ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs recv -F '\\''tank/my data@20220805-000000'\\'''":
+                expectSend20220805.fulfill()
+                return .success()
+            default:
+                XCTFail("unexpected command")
+                return .success()
+            }
+        }
+        let syncer = Syncer(
+            config: config,
+            dateFormatter: dateFormatter,
+            shell: shell
+        )
+        try await syncer.sync()
+        await fulfillment(
+            of: [
+                expectDelete20220804,
+                expectSend20220805,
+            ],
+            timeout: 1,
+            enforceOrder: false
+        )
     }
 }

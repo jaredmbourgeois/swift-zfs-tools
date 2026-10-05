@@ -32,14 +32,17 @@ public struct Snapshotter: Sendable {
     }
 
     /// Snapshot every matching dataset (`zfs snapshot [-r] 'dataset@<timestamp>'`). If a pool
-    /// threshold is set and exceeded, skips creation and returns without snapshotting.
+    /// threshold is set and exceeded, skips creation and returns without snapshotting. The
+    /// threshold check runs only when executing — dry-run prints the full plan without querying
+    /// the pool.
     public func snapshot() async throws {
-        if config.maxPoolUtilizationPercent != nil || config.minFreeBytes != nil,
+        if config.execute,
+           config.maxPoolUtilizationPercent != nil || config.minFreeBytes != nil,
            let pool = PoolUtilization.poolName(from: config.datasetGrep) {
             let utilization = try await PoolUtilization.query(
                 pool: pool,
                 shell: shell,
-                dryRun: !config.execute,
+                dryRun: false,
                 stringEncoding: .init(rawValue: config.stringEncodingRawValue),
                 lineSeparator: config.lineSeparator
             )
