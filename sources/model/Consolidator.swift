@@ -36,22 +36,18 @@ public struct Consolidator: Sendable {
     }
 
     /// Apply the retention schedule (`zfs destroy` for snapshots outside the windows), then, if a
-    /// pool threshold is set and still exceeded, aggressively prune oldest-first.
+    /// pool threshold is set and still exceeded, aggressively prune oldest-first. Listings and the
+    /// pool read run on a dry run too; only the destroys are held back.
     public func consolidate() async throws {
+        let runner = ZFSRunner(
+            shell: shell,
+            execute: config.execute,
+            stringEncoding: config.stringEncoding,
+            lineSeparator: config.lineSeparator
+        )
         // Two parallel local listings — read-only at the ZFS layer, parallel-safe.
-        // Safe under swift-shell 2.0.0 (parallel pipe-drain race fixed in 1.4.1).
-        async let datasetsLocalBinding: [String] = try await shell.lines(
-            ZFS.listDatasets(grepping: config.datasetGrep),
-            dryRun: !config.execute,
-            encoding: config.stringEncoding,
-            lineSeparator: config.lineSeparator
-        )
-        async let snapshotsLocalBinding: [String] = try await shell.lines(
-            ZFS.listSnapshots(grepping: config.datasetGrep),
-            dryRun: !config.execute,
-            encoding: config.stringEncoding,
-            lineSeparator: config.lineSeparator
-        )
+        async let datasetsLocalBinding: [String] = try await runner.lines(ZFS.listDatasets()).matching(config.datasetGrep)
+        async let snapshotsLocalBinding: [String] = try await runner.lines(ZFS.listSnapshots()).matching(config.datasetGrep)
         let (
             datasetsLocal,
             snapshotsLocal
@@ -139,28 +135,23 @@ public struct Consolidator: Sendable {
             return snapshots
         }
         for snapshot in snapshotsToDestroy {
-            _ = try await shell.execute(
-                ZFS.destroy(subject: snapshot),
-                dryRun: !config.execute
-            ).get()
+            _ = try await runner.run(ZFS.destroy(subject: snapshot))
         }
-        if config.execute,
-           config.maxPoolUtilizationPercent != nil || config.minFreeBytes != nil,
+        if config.maxPoolUtilizationPercent != nil || config.minFreeBytes != nil,
            let pool = PoolUtilization.poolName(from: config.datasetGrep) {
-            let utilization = try await PoolUtilization.query(
-                pool: pool,
-                shell: shell,
-                dryRun: false,
-                stringEncoding: config.stringEncoding,
-                lineSeparator: config.lineSeparator
-            )
+            let utilization = try await PoolUtilization.query(pool: pool, runner: runner)
             if utilization.exceedsThreshold(
                 maxCapacityPercent: config.maxPoolUtilizationPercent,
                 minFreeBytes: config.minFreeBytes
             ) {
-                print("zfs-tools consolidate: WARNING — pool \(pool) utilization exceeds threshold after consolidation (capacity: \(utilization.capacityPercent)%, available: \(utilization.availableBytes) bytes). Running aggressive pruning.")
+                let verdict = config.execute
+                    ? "Running aggressive pruning."
+                    : "dry-run — would prune oldest-first until within threshold; the candidates follow in order."
+                print("zfs-tools consolidate: WARNING — pool \(pool) utilization exceeds threshold after consolidation (capacity: \(utilization.capacityPercent)%, available: \(utilization.availableBytes) bytes). \(verdict)")
                 try await aggressivePrune(
                     pool: pool,
+                    utilization: utilization,
+                    runner: runner,
                     datasetsLocal: datasetsLocal,
                     snapshotsLocal: snapshotsLocal
                 )
@@ -168,8 +159,14 @@ public struct Consolidator: Sendable {
         }
     }
 
+    /// Destroy the oldest snapshots first until the pool is back within threshold, keeping the newest
+    /// of every dataset. On a real run the pool is re-read after each destroy; on a dry run nothing
+    /// is destroyed, so the pool is read once and every candidate is issued (as a dry-run command) in
+    /// the order a real run would take them.
     private func aggressivePrune(
         pool: String,
+        utilization initialUtilization: PoolUtilization,
+        runner: ZFSRunner,
         datasetsLocal: [String],
         snapshotsLocal: [String]
     ) async throws {
@@ -193,14 +190,11 @@ public struct Consolidator: Sendable {
         }
         let protectedSnapshots = Set(newestByDataset.values.map(\.snapshot))
         allSnapshotAndDates.removeAll { protectedSnapshots.contains($0.snapshot) || config.snapshotsNotConsolidated.contains($0.snapshot) }
-        for snapshotAndDate in allSnapshotAndDates {
-            let utilization = try await PoolUtilization.query(
-                pool: pool,
-                shell: shell,
-                dryRun: false,
-                stringEncoding: config.stringEncoding,
-                lineSeparator: config.lineSeparator
-            )
+        var utilization = initialUtilization
+        for (index, snapshotAndDate) in allSnapshotAndDates.enumerated() {
+            if index > 0, config.execute {
+                utilization = try await PoolUtilization.query(pool: pool, runner: runner)
+            }
             guard utilization.exceedsThreshold(
                 maxCapacityPercent: config.maxPoolUtilizationPercent,
                 minFreeBytes: config.minFreeBytes
@@ -208,11 +202,9 @@ public struct Consolidator: Sendable {
                 print("zfs-tools consolidate: pool \(pool) utilization now within threshold (capacity: \(utilization.capacityPercent)%). Aggressive pruning complete.")
                 return
             }
-            print("zfs-tools consolidate: aggressive prune — destroying \(snapshotAndDate.snapshot) (capacity: \(utilization.capacityPercent)%)")
-            _ = try await shell.execute(
-                ZFS.destroy(subject: snapshotAndDate.snapshot),
-                dryRun: !config.execute
-            ).get()
+            let verb = config.execute ? "destroying" : "dry-run — would destroy"
+            print("zfs-tools consolidate: aggressive prune — \(verb) \(snapshotAndDate.snapshot) (capacity: \(utilization.capacityPercent)%)")
+            _ = try await runner.run(ZFS.destroy(subject: snapshotAndDate.snapshot))
         }
     }
 

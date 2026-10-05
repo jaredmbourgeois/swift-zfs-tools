@@ -87,7 +87,9 @@ set -o pipefail; zfs send -v -I 'tank/data@<base>' 'tank/data@<latest>' \
 
 ## Dry-run by default
 
-`--execute` defaults to `false`. In dry-run, nothing touches ZFS — each command is printed instead of run, so you can inspect exactly what a cron job will do before trusting it. Add `--execute true` to apply. Every run logs each command, result, stdout, and stderr with explicit `zfs-tools command:`, `zfs-tools result:`, `zfs-tools stdout:`, and `zfs-tools stderr:` prefixes, so real runs are auditable too.
+`--execute` defaults to `false`. In dry-run, nothing is changed on ZFS: the read-only commands (`zfs list`, `zpool list`, the remote listing over SSH) run for real, so the plan is computed against the pool as it is, and every mutating command (`zfs snapshot`, `zfs destroy`, `zfs bookmark`, the send pipeline) is printed instead of run — so you can inspect exactly what a cron job will do before trusting it. Add `--execute true` to apply. A dry run therefore needs `zfs` on the host (and the receiver reachable for `sync`); a listing that fails fails the run rather than reporting an empty plan. Every run logs each command, result, stdout, and stderr with explicit `zfs-tools command:`, `zfs-tools result:`, `zfs-tools stdout:`, and `zfs-tools stderr:` prefixes, so real runs are auditable too.
+
+Every command is issued as a program and its arguments, not as a shell line, so a dataset name with a space or a shell character reaches `zfs` as written; the one shell pipeline is the send stream (`zfs send … | ssh … 'zfs recv -F …'`). The logged command line quotes a token only when it needs quoting, and pastes back into a shell as the same command.
 
 ## Commands
 
@@ -196,7 +198,7 @@ zfs-tools consolidate --dataset-grep tank/data --min-free-bytes 5368709120 --exe
   `zfs-tools snapshot: WARNING — pool tank utilization exceeds threshold (capacity: 86.0%, available: … bytes). Skipping snapshot creation.`
 - **consolidate** runs the normal schedule first, then — if still over the line — aggressively prunes the oldest snapshots one at a time (always keeping the most recent per dataset, plus anything protected) until utilization drops back under the threshold.
 
-Pool reads are fail-loud: if a real run gets unparseable output from ZFS, it errors rather than reading 0% and letting a full pool slip past the guard. (In dry-run the guard is inert.)
+Pool reads are fail-loud: unparseable output from ZFS errors rather than reading 0% and letting a full pool slip past the guard. The guard reads the real pool on a dry run too and reports what it would do — `snapshot` prints the warning with "would skip", and `consolidate` prints the aggressive-prune candidates oldest-first (reading the pool once, since nothing is destroyed) instead of destroying them.
 
 ## Remote sync
 
@@ -224,7 +226,7 @@ For offsites that may be unavailable longer than the source retention window, se
 
 ### receive-guard
 
-`zfs-tools receive-guard --pool <pool>` is intended for SSH forced commands on push-replication receiver keys. It accepts only the command shapes emitted by `sync`: `zfs recv -F <target>`, the snapshot-record `zfs list`, and `zfs destroy <snapshot>`. Receive and destroy targets must stay inside `--pool`, destroy targets must be snapshots, and the accepted list command is executed as a scoped `zfs list ... -r <pool>` so the key cannot enumerate unrelated snapshots. The pool name must be a single pool component: no empty value, surrounding whitespace, `/`, `@`, or `#`.
+`zfs-tools receive-guard --pool <pool>` is intended for SSH forced commands on push-replication receiver keys. It accepts only the command shapes emitted by `sync`: `zfs recv -F <target>` (a snapshot name, or the dataset for a multi-snapshot `-I` stream), the snapshot-record `zfs list`, and `zfs destroy <snapshot>`. Receive and destroy targets must stay inside `--pool`, a destroy target must be one snapshot (never a `%` range or a `,` list), and the accepted list command is executed as a scoped `zfs list ... -r <pool>` so the key cannot enumerate unrelated snapshots. The pool name must be a single pool component: no empty value, surrounding whitespace, `/`, `@`, or `#`. Quoted and bare arguments tokenize to the same argv, so a 2.1.0 sender and a 2.2.0 sender are both accepted.
 
 Example `authorized_keys` entry on the receiver:
 

@@ -51,13 +51,13 @@ final class ConsolidatorTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep 'nas_12tb/nas/' || true":
+            case "zfs list -o name -H":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents
                     """
                 )!
-            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas/' || true":
+            case "zfs list -o name -H -t snapshot":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents@20220805-000000
@@ -66,13 +66,13 @@ final class ConsolidatorTest: XCTestCase {
                     nas_12tb/nas/documents@20220729-000000
                     """
                 )!
-            case "zfs destroy 'nas_12tb/nas/documents@20220729-000000'":
+            case "zfs destroy nas_12tb/nas/documents@20220729-000000":
                 expectDestroy20220729.fulfill()
                 return .success()
-            case "zfs destroy 'nas_12tb/nas/documents@20220801-000000'":
+            case "zfs destroy nas_12tb/nas/documents@20220801-000000":
                 expectDestroy20220801.fulfill()
                 return .success()
-            case "zfs destroy 'nas_12tb/nas/documents@20220805-000000'":
+            case "zfs destroy nas_12tb/nas/documents@20220805-000000":
                 expectDestroy20220805.fulfill()
                 return .success()
             default:
@@ -119,13 +119,13 @@ final class ConsolidatorTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep 'nas_12tb/nas/' || true":
+            case "zfs list -o name -H":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents
                     """
                 )!
-            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas/' || true":
+            case "zfs list -o name -H -t snapshot":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents@20220805-000000
@@ -134,10 +134,10 @@ final class ConsolidatorTest: XCTestCase {
                     nas_12tb/nas/documents@20220729-000000
                     """
                 )!
-            case "zfs destroy 'nas_12tb/nas/documents@20220801-000000'":
+            case "zfs destroy nas_12tb/nas/documents@20220801-000000":
                 expectDestroy20220801.fulfill()
                 return .success()
-            case "zfs destroy 'nas_12tb/nas/documents@20220805-000000'":
+            case "zfs destroy nas_12tb/nas/documents@20220805-000000":
                 expectDestroy20220805.fulfill()
                 return .success()
             default:
@@ -180,13 +180,13 @@ final class ConsolidatorTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep 'nas_12tb/nas/' || true":
+            case "zfs list -o name -H":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents
                     """
                 )!
-            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas/' || true":
+            case "zfs list -o name -H -t snapshot":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents@20220805-000000
@@ -236,13 +236,13 @@ final class ConsolidatorTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep 'nas_12tb/nas/' || true":
+            case "zfs list -o name -H":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents
                     """
                 )!
-            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas/' || true":
+            case "zfs list -o name -H -t snapshot":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents@20220805-000000
@@ -251,13 +251,13 @@ final class ConsolidatorTest: XCTestCase {
                     nas_12tb/nas/documents@20220729-000000
                     """
                 )!
-            case "zfs destroy 'nas_12tb/nas/documents@20220729-000000'":
+            case "zfs destroy nas_12tb/nas/documents@20220729-000000":
                 expectDestroy20220729.fulfill()
                 return .success()
-            case "zfs destroy 'nas_12tb/nas/documents@20220801-000000'":
+            case "zfs destroy nas_12tb/nas/documents@20220801-000000":
                 expectDestroy20220801.fulfill()
                 return .success()
-            case "zfs destroy 'nas_12tb/nas/documents@20220805-000000'":
+            case "zfs destroy nas_12tb/nas/documents@20220805-000000":
                 expectDestroy20220805.fulfill()
                 return .success()
             default:
@@ -306,13 +306,13 @@ final class ConsolidatorTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep 'nas_12tb/nas/' || true":
+            case "zfs list -o name -H":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents
                     """
                 )!
-            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas/' || true":
+            case "zfs list -o name -H -t snapshot":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents@20220808-000000                  
@@ -320,13 +320,13 @@ final class ConsolidatorTest: XCTestCase {
                     nas_12tb/nas/documents@20220806-000000
                     """
                 )!
-            case "zfs destroy 'nas_12tb/nas/documents@20220806-000000'":
+            case "zfs destroy nas_12tb/nas/documents@20220806-000000":
                 expect20220806IsNotDestroyed.fulfill()
                 return .success()
-            case "zfs destroy 'nas_12tb/nas/documents@20220807-000000'":
+            case "zfs destroy nas_12tb/nas/documents@20220807-000000":
                 expect20220807IsNotDestroyed.fulfill()
                 return .success()
-            case "zfs destroy 'nas_12tb/nas/documents@20220808-000000'":
+            case "zfs destroy nas_12tb/nas/documents@20220808-000000":
                 expect20220808IsNotDestroyed.fulfill()
                 return .success()
             default:
@@ -372,9 +372,9 @@ final class ConsolidatorTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep 'nas_12tb/nas/' || true":
+            case "zfs list -o name -H":
                 return .success(stdout: "nas_12tb/nas/documents")!
-            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas/' || true":
+            case "zfs list -o name -H -t snapshot":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents@manual-before-migration
@@ -383,13 +383,13 @@ final class ConsolidatorTest: XCTestCase {
                     nas_12tb/nas/documents@20220801-000000
                     """
                 )!
-            case "zfs destroy 'nas_12tb/nas/documents@20220801-000000'":
+            case "zfs destroy nas_12tb/nas/documents@20220801-000000":
                 expectDestroy20220801.fulfill()
                 return .success()
-            case "zfs destroy 'nas_12tb/nas/documents@20220805-000000'":
+            case "zfs destroy nas_12tb/nas/documents@20220805-000000":
                 expectDestroy20220805.fulfill()
                 return .success()
-            case "zfs destroy 'nas_12tb/nas/documents@manual-before-migration'":
+            case "zfs destroy nas_12tb/nas/documents@manual-before-migration":
                 expectManualIsNotDestroyed.fulfill()
                 return .success()
             default:
@@ -408,13 +408,15 @@ final class ConsolidatorTest: XCTestCase {
         await fulfillment(of: [expectDestroy20220801, expectDestroy20220805, expectManualIsNotDestroyed], timeout: timeout)
     }
 
-    /// The post-consolidation pool-utilization threshold check must not run in dry-run: a
-    /// dry-run report prints the plan without querying pool state. Any pool query command
-    /// reaches the `default` branch and fails the test.
-    func testConsolidateDryRunWithThresholdDoesNotQueryPool() async throws {
+    /// A dry run with a pool threshold reads the real pool after the (held) destroys and reports
+    /// what it would do: the listings and both pool reads run, every destroy arrives as a dry run,
+    /// and under threshold no aggressive prune follows.
+    func testConsolidateDryRunWithThresholdReadsThePoolAndHoldsTheDestroys() async throws {
         let expectDestroy20220729 = expectation(description: "expect destroy 20220729")
         let expectDestroy20220801 = expectation(description: "expect destroy 20220801")
         let expectDestroy20220805 = expectation(description: "expect destroy 20220805")
+        let expectPoolReads = expectation(description: "both pool reads run, for real")
+        expectPoolReads.expectedFulfillmentCount = 2
         let config = Consolidator.Config(
             datasetGrep: "nas_12tb/nas/",
             dateSeparator: "@",
@@ -437,9 +439,9 @@ final class ConsolidatorTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep 'nas_12tb/nas/' || true":
+            case "zfs list -o name -H":
                 return .success(stdout: "nas_12tb/nas/documents")!
-            case "zfs list -o name -H -t snapshot | grep 'nas_12tb/nas/' || true":
+            case "zfs list -o name -H -t snapshot":
                 return .success(
                     stdout: """
                     nas_12tb/nas/documents@20220805-000000
@@ -448,15 +450,26 @@ final class ConsolidatorTest: XCTestCase {
                     nas_12tb/nas/documents@20220729-000000
                     """
                 )!
-            case "zfs destroy 'nas_12tb/nas/documents@20220729-000000'":
+            case "zpool list -Hp -o capacity nas_12tb":
+                XCTAssertFalse(dryRun, "a pool read runs for real on a dry run")
+                expectPoolReads.fulfill()
+                return .success(stdout: "50")!
+            case "zfs list -Hp -o used,available nas_12tb":
+                XCTAssertFalse(dryRun, "a pool read runs for real on a dry run")
+                expectPoolReads.fulfill()
+                return .success(stdout: "500000000000\t500000000000")!
+            case "zfs destroy nas_12tb/nas/documents@20220729-000000":
+                XCTAssertTrue(dryRun, "a destroy is held on a dry run")
                 expectDestroy20220729.fulfill()
-                return .success()
-            case "zfs destroy 'nas_12tb/nas/documents@20220801-000000'":
+                return .dryRun(command: command)
+            case "zfs destroy nas_12tb/nas/documents@20220801-000000":
+                XCTAssertTrue(dryRun, "a destroy is held on a dry run")
                 expectDestroy20220801.fulfill()
-                return .success()
-            case "zfs destroy 'nas_12tb/nas/documents@20220805-000000'":
+                return .dryRun(command: command)
+            case "zfs destroy nas_12tb/nas/documents@20220805-000000":
+                XCTAssertTrue(dryRun, "a destroy is held on a dry run")
                 expectDestroy20220805.fulfill()
-                return .success()
+                return .dryRun(command: command)
             default:
                 XCTFail("unexpected command: \(command)")
                 return .success()
@@ -474,9 +487,49 @@ final class ConsolidatorTest: XCTestCase {
             of: [
                 expectDestroy20220729,
                 expectDestroy20220801,
-                expectDestroy20220805
+                expectDestroy20220805,
+                expectPoolReads,
             ],
             timeout: timeout
         )
+    }
+
+    /// Over threshold on a dry run, the aggressive prune reads the pool once and issues every
+    /// candidate oldest-first as a dry-run destroy — the newest snapshot of each dataset kept — so
+    /// the report lists what a real run would take, without re-reading a pool nothing changed.
+    func testConsolidateDryRunOverThresholdListsTheAggressivePruneCandidates() async throws {
+        let config = Consolidator.Config(
+            datasetGrep: "nas_12tb/nas/",
+            dateSeparator: "@",
+            execute: false,
+            lineSeparator: "\n",
+            maxPoolUtilizationPercent: 80,
+            schedule: .Builder(upperBound: testDateString)
+                .keepingSnapshots(4, every: 1, .weeks, repeatedBy: 1)
+                .build(),
+            snapshotsNotConsolidated: [],
+            stringEncoding: .utf8
+        )
+        let recorder = RecordingShell { command in
+            switch command {
+            case "zfs list -o name -H": return .success(stdout: "nas_12tb/nas/documents")!
+            case "zfs list -o name -H -t snapshot":
+                return .success(stdout: """
+                    nas_12tb/nas/documents@20220805-000000
+                    nas_12tb/nas/documents@20220803-000000
+                    nas_12tb/nas/documents@20220801-000000
+                    """)!
+            case "zpool list -Hp -o capacity nas_12tb": return .success(stdout: "95")!
+            case "zfs list -Hp -o used,available nas_12tb": return .success(stdout: "950000000000\t50000000000")!
+            default: return nil
+            }
+        }
+        try await Consolidator(calendar: calendar, config: config, date: { [testDate] in testDate }, dateFormatter: dateFormatter, shell: recorder.shell).consolidate()
+        // The schedule keeps all three; the prune then offers the two oldest and keeps the newest.
+        XCTAssertEqual(
+            ["zfs destroy nas_12tb/nas/documents@20220801-000000", "zfs destroy nas_12tb/nas/documents@20220803-000000"],
+            recorder.dryRuns
+        )
+        XCTAssertEqual(1, recorder.executed.filter { $0.hasPrefix("zpool list") }.count, "the pool is read once on a dry run")
     }
 }

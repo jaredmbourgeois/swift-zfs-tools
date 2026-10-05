@@ -15,9 +15,12 @@ import Foundation
 //   • `zfs recv -F <target>`                                            (the incoming send stream)
 //   • `zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg`   (enumerate snapshots)
 //   • `zfs destroy <snapshot>`                                          (prune a snapshot)
-// Dataset/snapshot args are `.shellQuoted` by the sender, so this parser understands single-quoting
-// and backslash escapes. Validation is by exact argv shape; the approved command is then exec'd
-// DIRECTLY (no shell), so metacharacters in a rejected command are never interpreted.
+// The sender renders each remote command from argv (`ZFSCommand.commandLine`), quoting a token only
+// when it needs quoting, so this parser understands bare words, single-quoting and backslash
+// escapes alike (a 2.1.0 sender quoted every argument; both shapes tokenize to the same argv).
+// Validation is by exact argv shape; the approved command is then exec'd DIRECTLY (no shell), so
+// metacharacters in a rejected command are never interpreted. `SyncerGuardCompatTest` holds every
+// shape the sender emits to this policy.
 
 public enum ReceiveGuardRejection: Error, Equatable, Sendable {
     case emptyCommand
@@ -27,6 +30,8 @@ public enum ReceiveGuardRejection: Error, Equatable, Sendable {
     case wrongShape(String)  // right subcommand, unexpected argv
     case targetOutsidePool(String)  // recv/destroy target not within --pool
     case destroyTargetIsNotSnapshot(String)
+    /// A `%` range or a `,` list: `zfs destroy` would take several snapshots in one command.
+    case destroyTargetIsNotOneSnapshot(String)
     case invalidPool(String)
 }
 
@@ -76,6 +81,11 @@ public struct ReceiveGuardPolicy: Sendable {
             guard argv.count == 3 else { return .failure(.wrongShape(originalCommand)) }
             guard withinPool(argv[2]) else { return .failure(.targetOutsidePool(argv[2])) }
             guard argv[2].contains("@") else { return .failure(.destroyTargetIsNotSnapshot(argv[2])) }
+            // `zfs destroy pool/ds@a%b` destroys every snapshot between a and b, and `@a,b` both; the
+            // sender names one snapshot per destroy, so either character is a key doing more than it may.
+            guard !argv[2].contains("%"), !argv[2].contains(",") else {
+                return .failure(.destroyTargetIsNotOneSnapshot(argv[2]))
+            }
             return .success(argv)
 
         default:

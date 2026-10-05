@@ -71,43 +71,30 @@ final class PoolUtilizationTest: XCTestCase {
             XCTFail("unexpected command: \(command)")
             return .success()
         }
-        let utilization = try await PoolUtilization.query(
-            pool: "tank",
-            shell: shell,
-            dryRun: false,
-            stringEncoding: .utf8,
-            lineSeparator: "\n"
-        )
+        let utilization = try await PoolUtilization.query(pool: "tank", runner: runner(shell, execute: true))
         XCTAssertEqual(42, utilization.capacityPercent)
         XCTAssertEqual(1_234_567_890, utilization.usedBytes)
         XCTAssertEqual(9_876_543_210, utilization.availableBytes)
     }
 
-    func testQueryReturnsZerosInDryRun() async throws {
-        // In dry-run swift-shell echoes each command as stdout instead of running it, so the
-        // "output" is the (non-numeric, unparseable) command text. The guard must stay a safe
-        // no-op and return zeros — not throw. Regression guard for the H2 fail-loud change.
-        let shell = ShellAtPath {
-            @Sendable (
-                _ command: ShellCommand,
-                _ dryRun: Bool,
-                _ estimatedOutputSize: Int?,
-                _ estimatedErrorSize: Int?,
-                _ statusesForResult: ShellTermination.StatusesForResult,
-                _ stream: ShellStream?,
-                _ timeout: TimeInterval?
-            ) async -> ShellResult in
-            // mimic swift-shell's dry-run: echo the command back as stdout
-            .success(stdout: command)!
+    private func runner(_ shell: ShellAtPath, execute: Bool) -> ZFSRunner {
+        ZFSRunner(shell: shell, execute: execute, stringEncoding: .utf8, lineSeparator: "\n")
+    }
+
+    /// The pool reads are read-only, so a dry run runs them for real and the guard reads the real
+    /// numbers — the mock sees `dryRun == false` on both and nothing is echoed back.
+    func testQueryReadsThePoolOnADryRun() async throws {
+        let recorder = RecordingShell { command in
+            if command.hasPrefix("zpool list") { return .success(stdout: "42")! }
+            return .success(stdout: "1234567890\t9876543210")!
         }
-        let utilization = try await PoolUtilization.query(
-            pool: "tank",
-            shell: shell,
-            dryRun: true,
-            stringEncoding: .utf8,
-            lineSeparator: "\n"
+        let utilization = try await PoolUtilization.query(pool: "tank", runner: runner(recorder.shell, execute: false))
+        XCTAssertEqual(42, utilization.capacityPercent)
+        XCTAssertEqual(
+            ["zpool list -Hp -o capacity tank", "zfs list -Hp -o used,available tank"],
+            recorder.executed.sorted(by: >)
         )
-        XCTAssertEqual(PoolUtilization(capacityPercent: 0, usedBytes: 0, availableBytes: 0), utilization)
+        XCTAssertEqual([], recorder.dryRuns)
     }
 
     func testQueryThrowsOnUnparseableCapacity() async throws {
@@ -128,7 +115,7 @@ final class PoolUtilizationTest: XCTestCase {
             return .success(stdout: "1234567890\t9876543210")!
         }
         do {
-            _ = try await PoolUtilization.query(pool: "tank", shell: shell, dryRun: false, stringEncoding: .utf8, lineSeparator: "\n")
+            _ = try await PoolUtilization.query(pool: "tank", runner: runner(shell, execute: true))
             XCTFail("expected query to throw on unparseable capacity")
         } catch {
             // expected
@@ -152,38 +139,25 @@ final class PoolUtilizationTest: XCTestCase {
             return .success(stdout: "garbage-without-tab")!
         }
         do {
-            _ = try await PoolUtilization.query(pool: "tank", shell: shell, dryRun: false, stringEncoding: .utf8, lineSeparator: "\n")
+            _ = try await PoolUtilization.query(pool: "tank", runner: runner(shell, execute: true))
             XCTFail("expected query to throw on unparseable used/available")
         } catch {
             // expected
         }
     }
 
-    // MARK: - Dry-run + threshold does not throw (regression)
+    // MARK: - A dry run with a threshold reads the pool and holds the snapshot
 
-    func testSnapshotDryRunWithThresholdDoesNotThrow() async throws {
-        // dry-run (execute: false, the default) + a pool threshold must print the full plan, not
-        // error: the threshold check is skipped in dry-run (nothing is created or destroyed), so
-        // no pool query runs and the echoed command text never reaches the fail-loud parser.
-        let snapshotShouldBeCalled = expectation(description: "snapshot command should be printed")
-        let poolQueryShouldNotBeCalled = expectation(description: "pool query should not run")
-        poolQueryShouldNotBeCalled.isInverted = true
-        let shell = ShellAtPath {
-            @Sendable (
-                _ command: ShellCommand,
-                _ dryRun: Bool,
-                _ estimatedOutputSize: Int?,
-                _ estimatedErrorSize: Int?,
-                _ statusesForResult: ShellTermination.StatusesForResult,
-                _ stream: ShellStream?,
-                _ timeout: TimeInterval?
-            ) async -> ShellResult in
-            if command.contains("zpool list") || command.contains("zfs list -Hp") {
-                poolQueryShouldNotBeCalled.fulfill()
-            } else if command.contains("zfs snapshot") {
-                snapshotShouldBeCalled.fulfill()
+    func testSnapshotDryRunWithThresholdReadsThePoolAndHoldsTheSnapshot() async throws {
+        // dry-run (execute: false, the default) + a pool threshold: the guard reads the real pool —
+        // the two pool reads and the listing RUN — and the snapshot is reported, not taken.
+        let recorder = RecordingShell { command in
+            switch command {
+            case "zpool list -Hp -o capacity tank": return .success(stdout: "50")!
+            case "zfs list -Hp -o used,available tank": return .success(stdout: "500000000000\t500000000000")!
+            case "zfs list -o name -H": return .success(stdout: "tank/data")!
+            default: return nil
             }
-            return .success(stdout: command)!
         }
         let config = Snapshotter.Config(
             datasetGrep: "tank/data",
@@ -198,10 +172,37 @@ final class PoolUtilizationTest: XCTestCase {
             config: config,
             date: { testDate },
             dateFormatter: dateFormatter,
-            shell: shell
+            shell: recorder.shell
         )
         try await snapshotter.snapshot()
-        await fulfillment(of: [snapshotShouldBeCalled, poolQueryShouldNotBeCalled], timeout: timeout)
+        XCTAssertEqual(
+            ["zfs list -Hp -o used,available tank", "zfs list -o name -H", "zpool list -Hp -o capacity tank"],
+            recorder.executed.sorted()
+        )
+        XCTAssertEqual(["zfs snapshot tank/data@\(testDateString)"], recorder.dryRuns)
+    }
+
+    func testSnapshotDryRunOverThresholdReportsTheSkipAndTakesNothing() async throws {
+        let recorder = RecordingShell { command in
+            switch command {
+            case "zpool list -Hp -o capacity tank": return .success(stdout: "90")!
+            case "zfs list -Hp -o used,available tank": return .success(stdout: "900000000000\t100000000000")!
+            default: return nil
+            }
+        }
+        let config = Snapshotter.Config(
+            datasetGrep: "tank/data",
+            dateSeparator: Defaults.dateSeparator,
+            execute: false,
+            lineSeparator: Defaults.lineSeparator,
+            maxPoolUtilizationPercent: 80,
+            recursive: false,
+            stringEncodingRawValue: Defaults.stringEncoding.rawValue
+        )
+        try await Snapshotter(config: config, date: { testDate }, dateFormatter: dateFormatter, shell: recorder.shell).snapshot()
+        // Over threshold the run stops at the guard: no listing, no snapshot, not even a dry-run one.
+        XCTAssertEqual(["zfs list -Hp -o used,available tank", "zpool list -Hp -o capacity tank"], recorder.executed.sorted())
+        XCTAssertEqual([], recorder.dryRuns)
     }
 
     // MARK: - Snapshot skips when over threshold

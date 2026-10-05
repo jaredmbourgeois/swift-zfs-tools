@@ -12,8 +12,9 @@ import XCTest
 @testable import ZFSToolsModel
 
 // Confirms ActionExecutor decodes each action's config through the FileSystem witness and
-// dispatches to the matching operation. Each operation is recognised by its distinctive
-// datasetGrep, which appears in the first command it issues.
+// dispatches to the matching operation. Each operation is recognised by the mutation it issues
+// on its own dataset (the listings are the same bare commands for all three; the dataset filter
+// is applied in Swift).
 final class ActionExecutorTest: XCTestCase {
     func testExecuteDispatchesEachAction() async throws {
         let store = InMemoryFileStore()
@@ -78,14 +79,24 @@ final class ActionExecutorTest: XCTestCase {
             _ stream: ShellStream?,
             _ timeout: TimeInterval?
         ) async -> ShellResult in
-            if command.contains("grep 'tank/snap'") {
-                expectSnapshot.fulfill()
-            } else if command.contains("grep 'tank/cons'") {
-                expectConsolidate.fulfill()
-            } else if command.contains("grep 'tank/sync'") {
-                expectSync.fulfill()
+            switch command {
+            case "zfs list -o name -H":
+                return .success(stdout: "tank/snap\ntank/cons\ntank/sync")!
+            case "zfs list -o name -H -t snapshot":
+                // Consolidate's listing: an empty schedule keeps nothing older than now, so both go.
+                return .success(stdout: "tank/cons@20220801-000000\ntank/cons@20220802-000000")!
+            case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg":
+                return .success(stdout: snapshotRecord("guid-1", 1, "tank/sync@20220801-000000"))!
+            default:
+                if command.hasPrefix("zfs snapshot tank/snap@") {
+                    expectSnapshot.fulfill()
+                } else if command.hasPrefix("zfs destroy tank/cons@") {
+                    expectConsolidate.fulfill()
+                } else if command.contains("zfs send -v tank/sync@") {
+                    expectSync.fulfill()
+                }
+                return .success()
             }
-            return .success()
         }
 
         let executor = ActionExecutor(

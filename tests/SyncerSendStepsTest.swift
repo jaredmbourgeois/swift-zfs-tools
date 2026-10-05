@@ -100,7 +100,7 @@ final class SyncerSendStepsTest: XCTestCase {
             pruneRemoteSnapshots: false,
             sentBookmarkName: "sent-serverMTB"
         )
-        let ssh = "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP'"
+        let ssh = "ssh -p sshPort -i sshKeyPath sshUser@sshIP"
         let commands = Locked<[String]>([])
         let shell = ShellAtPath { @Sendable (
             _ command: ShellCommand,
@@ -112,17 +112,17 @@ final class SyncerSendStepsTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep 'nas_12tb/nas' || true":
+            case "zfs list -o name -H":
                 return .success(stdout: "nas_12tb/nas/documents")!
-            case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
+            case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg":
                 return .success(stdout: [
                     snapshotRecord("guid-30", 30, "nas_12tb/nas/documents@20220807-000000"),
                     snapshotRecord("guid-40", 40, "nas_12tb/nas/documents@20220808-000000"),
                     snapshotRecord("guid-50", 50, "nas_12tb/nas/documents@20220809-000000"),
                 ].joined(separator: "\n"))!
-            case "\(ssh) 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'nas_12tb/nas' || true":
+            case "\(ssh) 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg'":
                 return .success(stdout: snapshotRecord("bookmark-guid", 20, "nas_12tb/nas/documents@20220805-000000"))!
-            case "zfs list -t bookmark -H -p -o guid,createtxg,name -s createtxg | grep '#sent-serverMTB' || true":
+            case "zfs list -t bookmark -H -p -o guid,createtxg,name -s createtxg":
                 return .success(stdout: snapshotRecord("bookmark-guid", 20, "nas_12tb/nas/documents#sent-serverMTB"))!
             default:
                 commands.withLock { $0.append(command) }
@@ -134,13 +134,13 @@ final class SyncerSendStepsTest: XCTestCase {
         XCTAssertEqual(
             commands.withLock { $0 },
             [
-                "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents#sent-serverMTB' 'nas_12tb/nas/documents@20220807-000000' | \(ssh) 'zfs recv -F '\\''nas_12tb/nas/documents@20220807-000000'\\'''",
-                "set -o pipefail; zfs send -v -I 'nas_12tb/nas/documents@20220807-000000' 'nas_12tb/nas/documents@20220809-000000' | \(ssh) 'zfs recv -F '\\''nas_12tb/nas/documents'\\'''",
-                "zfs destroy 'nas_12tb/nas/documents#sent-serverMTB.tmp' || true",
-                "zfs bookmark 'nas_12tb/nas/documents@20220809-000000' 'nas_12tb/nas/documents#sent-serverMTB.tmp'",
-                "zfs destroy 'nas_12tb/nas/documents#sent-serverMTB' || true",
-                "zfs bookmark 'nas_12tb/nas/documents@20220809-000000' 'nas_12tb/nas/documents#sent-serverMTB'",
-                "zfs destroy 'nas_12tb/nas/documents#sent-serverMTB.tmp' || true",
+                "set -o pipefail; zfs send -v -i 'nas_12tb/nas/documents#sent-serverMTB' nas_12tb/nas/documents@20220807-000000 | \(ssh) 'zfs recv -F nas_12tb/nas/documents@20220807-000000'",
+                "set -o pipefail; zfs send -v -I nas_12tb/nas/documents@20220807-000000 nas_12tb/nas/documents@20220809-000000 | \(ssh) 'zfs recv -F nas_12tb/nas/documents'",
+                // No stale `.tmp` in the listing, so none is destroyed first; the old bookmark is.
+                "zfs bookmark nas_12tb/nas/documents@20220809-000000 'nas_12tb/nas/documents#sent-serverMTB.tmp'",
+                "zfs destroy 'nas_12tb/nas/documents#sent-serverMTB'",
+                "zfs bookmark nas_12tb/nas/documents@20220809-000000 'nas_12tb/nas/documents#sent-serverMTB'",
+                "zfs destroy 'nas_12tb/nas/documents#sent-serverMTB.tmp'",
             ])
     }
 
@@ -152,7 +152,7 @@ final class SyncerSendStepsTest: XCTestCase {
             pruneRemoteSnapshots: false,
             sentBookmarkName: "sent-serverMTB"
         )
-        let ssh = "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP'"
+        let ssh = "ssh -p sshPort -i sshKeyPath sshUser@sshIP"
         let bookmarkCommands = Locked<Int>(0)
         let shell = ShellAtPath { @Sendable (
             _ command: ShellCommand,
@@ -164,17 +164,17 @@ final class SyncerSendStepsTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep 'nas_12tb/nas' || true":
+            case "zfs list -o name -H":
                 return .success(stdout: "nas_12tb/nas/documents")!
-            case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
+            case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg":
                 return .success(stdout: [
                     snapshotRecord("guid-20", 20, "nas_12tb/nas/documents@20220805-000000"),
                     snapshotRecord("guid-30", 30, "nas_12tb/nas/documents@20220807-000000"),
                     snapshotRecord("guid-40", 40, "nas_12tb/nas/documents@20220808-000000"),
                 ].joined(separator: "\n"))!
-            case "\(ssh) 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'nas_12tb/nas' || true":
+            case "\(ssh) 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg'":
                 return .success(stdout: snapshotRecord("guid-20", 20, "nas_12tb/nas/documents@20220805-000000"))!
-            case "zfs list -t bookmark -H -p -o guid,createtxg,name -s createtxg | grep '#sent-serverMTB' || true":
+            case "zfs list -t bookmark -H -p -o guid,createtxg,name -s createtxg":
                 return .success(stdout: "")!
             default:
                 if command.contains("zfs send") {
@@ -210,15 +210,15 @@ final class SyncerSendStepsTest: XCTestCase {
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep 'nas_12tb/nas' || true":
+            case "zfs list -o name -H":
                 return .success(stdout: "nas_12tb/nas/media/photos\nnas_12tb/nas/media\nnas_12tb/nas/documents")!
-            case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'nas_12tb/nas' || true":
+            case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg":
                 return .success(stdout: [
                     snapshotRecord("guid-1", 1, "nas_12tb/nas/documents@20220805-000000"),
                     snapshotRecord("guid-2", 2, "nas_12tb/nas/media@20220805-000000"),
                     snapshotRecord("guid-3", 3, "nas_12tb/nas/media/photos@20220805-000000"),
                 ].joined(separator: "\n"))!
-            case "ssh -p 'sshPort' -i 'sshKeyPath' 'sshUser'@'sshIP' 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg' | grep 'nas_12tb/nas' || true":
+            case "ssh -p sshPort -i sshKeyPath sshUser@sshIP 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg'":
                 return .success(stdout: "")!
             default:
                 sent.withLock { $0.append(command) }

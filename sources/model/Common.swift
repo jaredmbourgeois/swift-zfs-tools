@@ -168,93 +168,140 @@ struct SnapshotRecord: Equatable, Sendable {
     }
 }
 
-extension String {
-    /// POSIX-safe single-quoting for shell arguments: wrap in single quotes and escape any
-    /// embedded single quote as the standard `'\''` (close-quote, literal quote, reopen-quote).
-    /// Keeps dataset names with spaces (legal in ZFS), grep patterns, and ssh args from
-    /// word-splitting, glob-expanding, or injecting when interpolated into a shell command.
-    var shellQuoted: String {
-        "'" + replacingOccurrences(of: "'", with: "'\\''") + "'"
+// `String.shellQuoted` — POSIX single-quoting for a value interpolated into a shell command line —
+// is swift-shell's (`ShellQuoting.swift`), shared with `[String].shellCommandLine`.
+
+/// One command the tool issues: WHAT runs (`form`) and whether it changes anything (`effect`).
+/// `effect` is the one input to the dry-run decision (`ZFSRunner`): a read-only command always
+/// runs, so a dry run plans against the real pool; a mutating command runs only when executing.
+struct ZFSCommand: Equatable, Sendable {
+    enum Effect: Sendable {
+        case readOnly
+        case mutating
+    }
+
+    enum Form: Equatable, Sendable {
+        /// A program and its arguments, spawned directly — no shell parses them, so a dataset name
+        /// with a space or a `$` reaches `zfs` as written.
+        case argv(executable: String, arguments: [String])
+        /// A shell command line (`bash -c`), kept for the one genuine pipeline: the send stream.
+        case shell(String)
+    }
+
+    let form: Form
+    let effect: Effect
+
+    /// The command as one line — what logs, observers, a dry run's output and a test mock see. An
+    /// argv renders with each token quoted only when it needs quoting (`shellCommandLine`), so the
+    /// line pastes back into a shell as the same argv.
+    var commandLine: String {
+        switch form {
+        case .argv(let executable, let arguments): ([executable] + arguments).shellCommandLine
+        case .shell(let line): line
+        }
     }
 }
 
+/// The `zfs`/`zpool` commands the tool issues. Listings take no filter: the sender filters names in
+/// Swift (`matching(_:)`), so a listing that fails fails, instead of `| grep … || true` reading an
+/// error as "nothing matched" — and a receive-guard sees exactly the bare listing it whitelists.
 enum ZFS {
-    static func destroy(subject: String) -> String {
-        "zfs destroy \(subject.shellQuoted)"
+    static func zfs(_ arguments: [String], _ effect: ZFSCommand.Effect) -> ZFSCommand {
+        ZFSCommand(form: .argv(executable: "zfs", arguments: arguments), effect: effect)
     }
 
-    private static func list() -> String {
-        "zfs list -o name -H"
+    static func destroy(subject: String) -> ZFSCommand {
+        zfs(["destroy", subject], .mutating)
     }
 
-    static func listDatasets(grepping: String? = nil) -> String {
-        var command = Self.list()
-        if let grepping {
-            // `|| true` so an empty grep result (no datasets matching) is reported as zero
-            // datasets, not a failure. grep exits 1 on no-match which the shell wrapper
-            // would otherwise propagate as a hard error — meaningful for first-time runs.
-            command += " | grep \(grepping.shellQuoted) || true"
-        }
-        return command
+    static func listDatasets() -> ZFSCommand {
+        zfs(["list", "-o", "name", "-H"], .readOnly)
     }
 
-    static func listSnapshots(grepping: String? = nil) -> String {
-        var command = "\(Self.list()) -t snapshot"
-        if let grepping {
-            // See note on listDatasets — same rationale (e.g. fresh remote with no snapshots yet).
-            command += " | grep \(grepping.shellQuoted) || true"
-        }
-        return command
+    static func listSnapshots() -> ZFSCommand {
+        zfs(["list", "-o", "name", "-H", "-t", "snapshot"], .readOnly)
     }
 
-    static func listSnapshotRecords(grepping: String? = nil) -> String {
-        var command = "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg"
-        if let grepping {
-            // See note on listDatasets — same rationale (e.g. fresh remote with no snapshots yet).
-            command += " | grep \(grepping.shellQuoted) || true"
-        }
-        return command
+    /// The listing a receive-guard whitelists verbatim (`ReceiveGuardPolicy`): change it there too.
+    static func listSnapshotRecords() -> ZFSCommand {
+        zfs(["list", "-t", "snapshot", "-H", "-p", "-o", "guid,createtxg,name", "-s", "createtxg"], .readOnly)
     }
 
-    static func listBookmarkRecords(grepping: String? = nil) -> String {
-        var command = "zfs list -t bookmark -H -p -o guid,createtxg,name -s createtxg"
-        if let grepping {
-            command += " | grep \(grepping.shellQuoted) || true"
-        }
-        return command
+    static func listBookmarkRecords() -> ZFSCommand {
+        zfs(["list", "-t", "bookmark", "-H", "-p", "-o", "guid,createtxg,name", "-s", "createtxg"], .readOnly)
     }
 
-    static func bookmark(snapshot: String, bookmark: String) -> String {
-        "zfs bookmark \(snapshot.shellQuoted) \(bookmark.shellQuoted)"
+    static func bookmark(snapshot: String, bookmark: String) -> ZFSCommand {
+        zfs(["bookmark", snapshot, bookmark], .mutating)
     }
 
-    static func snapshot(dataset: String, date: Date, dateFormatter: DateFormatter, dateSeparator: String, recursive: Bool = false) -> String {
-        var command = "zfs snapshot"
+    static func snapshot(dataset: String, date: Date, dateFormatter: DateFormatter, dateSeparator: String, recursive: Bool = false) -> ZFSCommand {
+        var arguments = ["snapshot"]
         if recursive {
-          command += " -r"
+            arguments.append("-r")
         }
-        let snapshotName = "\(dataset)\(dateSeparator)\(dateFormatter.string(from: date))"
-        command += " \(snapshotName.shellQuoted)"
-        return command
+        arguments.append("\(dataset)\(dateSeparator)\(dateFormatter.string(from: date))")
+        return zfs(arguments, .mutating)
     }
 
-    /// Returns pool capacity as integer percentage (0-100).
-    /// Output: single integer, e.g. "42"
-    static func poolCapacity(pool: String) -> String {
-        "zpool list -Hp -o capacity \(pool.shellQuoted)"
+    /// `zfs recv -F <target>` — the receiving end of a send stream; a receive-guard accepts this
+    /// shape for any target inside its pool.
+    static func receive(target: String) -> ZFSCommand {
+        zfs(["recv", "-F", target], .mutating)
     }
 
-    /// Returns used and available bytes for a dataset/pool.
-    /// Output: tab-separated "used\tavailable", e.g. "1234567890\t9876543210"
-    static func listUsedAvailable(dataset: String) -> String {
-        "zfs list -Hp -o used,available \(dataset.shellQuoted)"
+    /// Pool capacity as an integer percentage (0-100): one line, e.g. "42".
+    static func poolCapacity(pool: String) -> ZFSCommand {
+        ZFSCommand(form: .argv(executable: "zpool", arguments: ["list", "-Hp", "-o", "capacity", pool]), effect: .readOnly)
+    }
+
+    /// Used and available bytes for a dataset or pool: one tab-separated line, e.g. "1234\t5678".
+    static func listUsedAvailable(dataset: String) -> ZFSCommand {
+        zfs(["list", "-Hp", "-o", "used,available", dataset], .readOnly)
+    }
+}
+
+/// Runs `ZFSCommand`s through the shell and owns the tool's ONE dry-run decision: a read-only
+/// command always runs, a mutating command runs only when `execute` is true and is otherwise
+/// reported by the shell (`ShellResult.dryRun`, nothing spawned). Every operation builds one from
+/// its config, so no call site decides dry-run for itself.
+struct ZFSRunner: Sendable {
+    let shell: ShellAtPath
+    let execute: Bool
+    let stringEncoding: String.Encoding
+    let lineSeparator: String
+
+    func run(_ command: ZFSCommand) async throws -> ShellProcessOutput {
+        let dryRun = command.effect == .mutating && !execute
+        switch command.form {
+        case .argv(let executable, let arguments):
+            return try await shell.execute(executable: executable, arguments: arguments, dryRun: dryRun).get()
+        case .shell(let line):
+            return try await shell.execute(line, dryRun: dryRun).get()
+        }
+    }
+
+    /// A read-only command's stdout as lines. A mutating command has no listing to read.
+    func lines(_ command: ZFSCommand) async throws -> [String] {
+        precondition(command.effect == .readOnly, "lines(_:) reads a listing; `\(command.commandLine)` mutates")
+        return try await run(command)
+            .decodeStringLines(encoding: stringEncoding, lineSeparator: lineSeparator)
+            .stdoutTyped
+    }
+}
+
+extension Array where Element == String {
+    /// The names that contain `pattern` as a fixed substring — the sender-side filter that replaced
+    /// `| grep <pattern> || true`. `nil` or an empty pattern keeps every name.
+    func matching(_ pattern: String?) -> [String] {
+        guard let pattern, !pattern.isEmpty else { return self }
+        return filter { $0.contains(pattern) }
     }
 }
 
 extension ShellAtPath {
-    /// Run `command` and return its stdout split into lines — the shared
-    /// `execute → get → decodeStringLines → stdoutTyped` chain used across every ZFS listing
-    /// and query call site.
+    /// Run a command LINE and return its stdout split into lines. `Builder` (a developer tool that
+    /// never dry-runs) is its one caller; every ZFS listing goes through `ZFSRunner.lines(_:)`.
     func lines(
         _ command: ShellCommand,
         dryRun: Bool,

@@ -143,6 +143,18 @@ final class ReceiveGuardTest: XCTestCase {
             policy.validate("zfs destroy 'nas_12tb/nas'"), .failure(.destroyTargetIsNotSnapshot("nas_12tb/nas")))
     }
 
+    func testRejectsDestroyOfASnapshotRange() {
+        XCTAssertEqual(
+            policy.validate("zfs destroy nas_12tb/nas@20260501-000000%20260506-000000"),
+            .failure(.destroyTargetIsNotOneSnapshot("nas_12tb/nas@20260501-000000%20260506-000000")))
+    }
+
+    func testRejectsDestroyOfASnapshotList() {
+        XCTAssertEqual(
+            policy.validate("zfs destroy 'nas_12tb/nas@a,b'"),
+            .failure(.destroyTargetIsNotOneSnapshot("nas_12tb/nas@a,b")))
+    }
+
     func testRejectsListWithExtraArgs() {
         // a broadened list (e.g. a different -o) is not what the sender emits → rejected
         let command = "zfs list -o name,used -H -t snapshot"

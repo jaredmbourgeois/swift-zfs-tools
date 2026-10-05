@@ -31,63 +31,55 @@ public struct Snapshotter: Sendable {
         self.shell = shell
     }
 
-    /// Snapshot every matching dataset (`zfs snapshot [-r] 'dataset@<timestamp>'`). If a pool
-    /// threshold is set and exceeded, skips creation and returns without snapshotting. The
-    /// threshold check runs only when executing — dry-run prints the full plan without querying
-    /// the pool.
+    /// Snapshot every matching dataset (`zfs snapshot [-r] dataset@<timestamp>`). If a pool
+    /// threshold is set and exceeded, skips creation and returns without snapshotting. The pool is
+    /// read on a dry run too, so the report says what a real run would do; only the snapshots are
+    /// held back.
     public func snapshot() async throws {
-        if config.execute,
-           config.maxPoolUtilizationPercent != nil || config.minFreeBytes != nil,
+        let runner = ZFSRunner(
+            shell: shell,
+            execute: config.execute,
+            stringEncoding: .init(rawValue: config.stringEncodingRawValue),
+            lineSeparator: config.lineSeparator
+        )
+        if config.maxPoolUtilizationPercent != nil || config.minFreeBytes != nil,
            let pool = PoolUtilization.poolName(from: config.datasetGrep) {
-            let utilization = try await PoolUtilization.query(
-                pool: pool,
-                shell: shell,
-                dryRun: false,
-                stringEncoding: .init(rawValue: config.stringEncodingRawValue),
-                lineSeparator: config.lineSeparator
-            )
+            let utilization = try await PoolUtilization.query(pool: pool, runner: runner)
             if utilization.exceedsThreshold(
                 maxCapacityPercent: config.maxPoolUtilizationPercent,
                 minFreeBytes: config.minFreeBytes
             ) {
-                print("zfs-tools snapshot: WARNING — pool \(pool) utilization exceeds threshold (capacity: \(utilization.capacityPercent)%, available: \(utilization.availableBytes) bytes). Skipping snapshot creation.")
+                let verdict = config.execute ? "Skipping snapshot creation." : "dry-run — would skip snapshot creation."
+                print("zfs-tools snapshot: WARNING — pool \(pool) utilization exceeds threshold (capacity: \(utilization.capacityPercent)%, available: \(utilization.availableBytes) bytes). \(verdict)")
                 return
             }
         }
-        let datasetsListed = try await shell.lines(
-            ZFS.listDatasets(grepping: config.datasetGrep),
-            dryRun: !config.execute,
-            encoding: .init(rawValue: config.stringEncodingRawValue),
-            lineSeparator: config.lineSeparator
-        )
-        .filter { dataset in
-            !config.excludedDatasetGreps.contains { excluded in
-                !excluded.isEmpty && dataset.contains(excluded)
+        // One timestamp per run: every dataset's snapshot carries the same name suffix, so a run is
+        // one point in time however long its snapshots take.
+        let snapshotDate = date()
+        let datasetsListed = try await runner.lines(ZFS.listDatasets())
+            .matching(config.datasetGrep)
+            .filter { dataset in
+                !config.excludedDatasetGreps.contains { excluded in
+                    !excluded.isEmpty && dataset.contains(excluded)
+                }
             }
-        }
         let datasets = Self.snapshotDatasets(from: datasetsListed, recursive: config.recursive, hasExclusions: !config.excludedDatasetGreps.isEmpty)
-        // Per-dataset `zfs snapshot` calls in parallel. Each is independent at the
-        // ZFS layer — distinct datasets share the pool's TXG batch but the kernel
-        // serializes metadata commits transparently, so parallelism is safe and
-        // saves wall time when N is large. Safe under swift-shell 2.0.0 — the
-        // pre-1.4.1 pipe-drain race that lost stdout (empty-output on macOS / hard
-        // libdispatch segfault on Swift 6.3.1 / Linux) under parallel use was fixed
-        // in 1.4.1; 2.0.0 adds Linux support via dedicated reader threads.
+        // Per-dataset `zfs snapshot` calls in parallel. Each is independent at the ZFS layer —
+        // distinct datasets share the pool's TXG batch but the kernel serializes metadata commits
+        // transparently, so parallelism is safe and saves wall time when N is large.
         try await withThrowingDiscardingTaskGroup { taskGroup in
             for dataset in datasets {
                 taskGroup.addTask {
-                    _ = try await shell.execute(
+                    _ = try await runner.run(
                         ZFS.snapshot(
                             dataset: dataset,
-                            date: date(),
+                            date: snapshotDate,
                             dateFormatter: dateFormatter,
                             dateSeparator: config.dateSeparator,
                             recursive: config.recursive && config.excludedDatasetGreps.isEmpty
-                        ),
-                        dryRun: !config.execute
+                        )
                     )
-                    .get()
-                    return
                 }
             }
         }

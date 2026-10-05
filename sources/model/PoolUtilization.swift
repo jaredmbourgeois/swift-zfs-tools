@@ -40,53 +40,27 @@ public struct PoolUtilization: Sendable, Equatable {
         return false
     }
 
-    /// Read a pool's utilization via `zpool list` / `zfs list` (run in parallel). In dry-run the
-    /// commands are echoed rather than run, so this returns zeros (the guard is inert); on a real
-    /// run, unparseable output throws rather than silently reading 0%.
-    public static func query(
+    /// Read a pool's utilization via `zpool list` / `zfs list` (run in parallel). Both are read-only,
+    /// so they run on a dry run too: the guard reads the real pool and reports what it would do.
+    /// Unparseable output throws rather than silently reading 0%, which would let a full pool slip
+    /// past the guard.
+    static func query(
         pool: String,
-        shell: ShellAtPath,
-        dryRun: Bool,
-        stringEncoding: String.Encoding,
-        lineSeparator: String
+        runner: ZFSRunner
     ) async throws -> PoolUtilization {
         // Two parallel local listings — read-only at the ZFS layer, parallel-safe.
-        // Safe under swift-shell 2.0.0 (parallel pipe-drain race fixed in 1.4.1).
-        async let capacityBinding: String = try await shell.lines(
-            ZFS.poolCapacity(pool: pool),
-            dryRun: dryRun,
-            encoding: stringEncoding,
-            lineSeparator: lineSeparator
-        )
-        .first ?? ""
-        async let usedAvailableBinding: String = try await shell.lines(
-            ZFS.listUsedAvailable(dataset: pool),
-            dryRun: dryRun,
-            encoding: stringEncoding,
-            lineSeparator: lineSeparator
-        )
-        .first ?? ""
+        async let capacityBinding: String = try await runner.lines(ZFS.poolCapacity(pool: pool)).first ?? ""
+        async let usedAvailableBinding: String = try await runner.lines(ZFS.listUsedAvailable(dataset: pool)).first ?? ""
         let (capacityString, usedAvailableString) = try await (capacityBinding, usedAvailableBinding)
 
-        // In dry-run, swift-shell echoes each command as stdout instead of running it, so there is
-        // no real numeric output to read. Return zeros — the threshold guard is inert in dry-run
-        // (nothing is created or destroyed) and the commands are still printed by the shell observer
-        // for visibility.
-        guard !dryRun else {
-            return PoolUtilization(capacityPercent: 0, usedBytes: 0, availableBytes: 0)
-        }
-
-        // Real run (exit 0): require parseable numbers. Empty or unparseable output here is
-        // genuinely abnormal — fail loud rather than silently reading 0%, which would let a full
-        // pool slip past the guard (fail-open).
         let capacityTrimmed = capacityString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let capacityPercent = Float(capacityTrimmed) else {
-            throw ErrorType.shellError(command: ZFS.poolCapacity(pool: pool), error: "unparseable pool capacity: \(capacityTrimmed)")
+            throw ErrorType.shellError(command: ZFS.poolCapacity(pool: pool).commandLine, error: "unparseable pool capacity: \(capacityTrimmed)")
         }
         let usedAvailableTrimmed = usedAvailableString.trimmingCharacters(in: .whitespacesAndNewlines)
         let parts = usedAvailableTrimmed.split(separator: "\t")
         guard parts.count >= 2, let usedBytes = Int64(parts[0]), let availableBytes = Int64(parts[1]) else {
-            throw ErrorType.shellError(command: ZFS.listUsedAvailable(dataset: pool), error: "unparseable used/available: \(usedAvailableTrimmed)")
+            throw ErrorType.shellError(command: ZFS.listUsedAvailable(dataset: pool).commandLine, error: "unparseable used/available: \(usedAvailableTrimmed)")
         }
 
         return PoolUtilization(

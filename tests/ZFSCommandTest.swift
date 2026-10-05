@@ -11,8 +11,9 @@ import XCTest
 
 @testable import ZFSToolsModel
 
-// Pins the shell-command construction: every interpolated value is single-quoted so dataset
-// names with spaces (legal in ZFS), grep patterns, and ssh args can't word-split or inject.
+// Pins the command construction: every command is argv (no shell parses a dataset name), each
+// builder declares whether it mutates — the one input to the dry-run decision — and the rendered
+// line quotes a token only when it needs quoting.
 final class ZFSCommandTest: XCTestCase {
     // MARK: - shell logging
 
@@ -26,110 +27,121 @@ final class ZFSCommandTest: XCTestCase {
         XCTAssertEqual("zfs-tools stderr:\nwarning\n", formatter.stderr(result.processOutput.stderr))
     }
 
-    // MARK: - shellQuoted
+    // MARK: - effect: the dry-run decision's one input
 
-    func testShellQuotedWrapsPlainValue() {
-        XCTAssertEqual("'abc'", "abc".shellQuoted)
+    func testListingsAndPoolReadsAreReadOnly() {
+        for command in [
+            ZFS.listDatasets(),
+            ZFS.listSnapshots(),
+            ZFS.listSnapshotRecords(),
+            ZFS.listBookmarkRecords(),
+            ZFS.poolCapacity(pool: "tank"),
+            ZFS.listUsedAvailable(dataset: "tank"),
+        ] {
+            XCTAssertEqual(.readOnly, command.effect, command.commandLine)
+        }
     }
 
-    func testShellQuotedWrapsValueWithSpace() {
-        XCTAssertEqual("'a b'", "a b".shellQuoted)
+    func testEverythingElseMutates() {
+        for command in [
+            ZFS.destroy(subject: "tank/data@s1"),
+            ZFS.bookmark(snapshot: "tank/data@s1", bookmark: "tank/data#sent"),
+            ZFS.snapshot(dataset: "tank/data", date: testDate, dateFormatter: dateFormatter, dateSeparator: "@"),
+            ZFS.receive(target: "tank/data"),
+        ] {
+            XCTAssertEqual(.mutating, command.effect, command.commandLine)
+        }
     }
 
-    func testShellQuotedEscapesEmbeddedSingleQuote() {
-        // a'b -> 'a'\''b' (close quote, escaped quote, reopen quote)
-        XCTAssertEqual("'a'\\''b'", "a'b".shellQuoted)
+    // MARK: - argv and its rendering
+
+    func testDestroyIsArgvAndRendersBare() {
+        let command = ZFS.destroy(subject: "tank/data@20220806-000000")
+        XCTAssertEqual(.argv(executable: "zfs", arguments: ["destroy", "tank/data@20220806-000000"]), command.form)
+        XCTAssertEqual("zfs destroy tank/data@20220806-000000", command.commandLine)
     }
 
-    func testShellQuotedEmptyString() {
-        XCTAssertEqual("''", "".shellQuoted)
+    func testDestroyRendersASpacedNameQuoted() {
+        XCTAssertEqual("zfs destroy 'tank/my data@20220806-000000'", ZFS.destroy(subject: "tank/my data@20220806-000000").commandLine)
     }
 
-    // MARK: - destroy
-
-    func testDestroyQuotesSubject() {
-        XCTAssertEqual("zfs destroy 'tank/data@20220806-000000'", ZFS.destroy(subject: "tank/data@20220806-000000"))
+    func testListingsTakeNoFilter() {
+        XCTAssertEqual("zfs list -o name -H", ZFS.listDatasets().commandLine)
+        XCTAssertEqual("zfs list -o name -H -t snapshot", ZFS.listSnapshots().commandLine)
+        XCTAssertEqual("zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg", ZFS.listSnapshotRecords().commandLine)
+        XCTAssertEqual("zfs list -t bookmark -H -p -o guid,createtxg,name -s createtxg", ZFS.listBookmarkRecords().commandLine)
     }
 
-    func testDestroyQuotesSubjectWithSpace() {
-        XCTAssertEqual("zfs destroy 'tank/my data@20220806-000000'", ZFS.destroy(subject: "tank/my data@20220806-000000"))
-    }
-
-    // MARK: - listDatasets / listSnapshots
-
-    func testListDatasetsNoGrep() {
-        XCTAssertEqual("zfs list -o name -H", ZFS.listDatasets())
-    }
-
-    func testListDatasetsQuotesGrep() {
-        XCTAssertEqual("zfs list -o name -H | grep 'tank/data' || true", ZFS.listDatasets(grepping: "tank/data"))
-    }
-
-    func testListDatasetsQuotesEmptyGrep() {
-        // empty pattern is preserved as grep '' (matches all) rather than a bare `grep`
-        XCTAssertEqual("zfs list -o name -H | grep '' || true", ZFS.listDatasets(grepping: ""))
-    }
-
-    func testListSnapshotsNoGrep() {
-        XCTAssertEqual("zfs list -o name -H -t snapshot", ZFS.listSnapshots())
-    }
-
-    func testListSnapshotsQuotesGrep() {
-        XCTAssertEqual("zfs list -o name -H -t snapshot | grep 'tank/data' || true", ZFS.listSnapshots(grepping: "tank/data"))
-    }
-
-    func testListSnapshotRecordsNoGrep() {
+    func testBookmarkQuotesOnlyTheHashNames() {
+        // `#` is outside the safe set, so a bookmark name is quoted and a snapshot name is not.
         XCTAssertEqual(
-            "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg",
-            ZFS.listSnapshotRecords()
+            "zfs bookmark tank/data@s1 'tank/data#sent-backup'",
+            ZFS.bookmark(snapshot: "tank/data@s1", bookmark: "tank/data#sent-backup").commandLine
         )
     }
 
-    func testListSnapshotRecordsQuotesGrep() {
-        XCTAssertEqual(
-            "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg | grep 'tank/data' || true",
-            ZFS.listSnapshotRecords(grepping: "tank/data")
-        )
-    }
-
-    func testListBookmarkRecordsQuotesGrep() {
-        XCTAssertEqual(
-            "zfs list -t bookmark -H -p -o guid,createtxg,name -s createtxg | grep '#sent-backup' || true",
-            ZFS.listBookmarkRecords(grepping: "#sent-backup")
-        )
-    }
-
-    func testBookmarkQuotesSnapshotAndBookmark() {
-        XCTAssertEqual(
-            "zfs bookmark 'tank/data@s1' 'tank/data#sent-backup'",
-            ZFS.bookmark(snapshot: "tank/data@s1", bookmark: "tank/data#sent-backup")
-        )
-    }
-
-    // MARK: - snapshot
-
-    func testSnapshotQuotesName() {
+    func testSnapshotName() {
         let command = ZFS.snapshot(dataset: "tank/data", date: testDate, dateFormatter: dateFormatter, dateSeparator: "@")
-        XCTAssertEqual("zfs snapshot 'tank/data@20220806-000000'", command)
+        XCTAssertEqual("zfs snapshot tank/data@20220806-000000", command.commandLine)
     }
 
-    func testSnapshotRecursiveQuotesName() {
+    func testSnapshotRecursive() {
         let command = ZFS.snapshot(dataset: "tank/data", date: testDate, dateFormatter: dateFormatter, dateSeparator: "@", recursive: true)
-        XCTAssertEqual("zfs snapshot -r 'tank/data@20220806-000000'", command)
+        XCTAssertEqual("zfs snapshot -r tank/data@20220806-000000", command.commandLine)
     }
 
-    func testSnapshotQuotesNameWithSpace() {
+    func testSnapshotSpacedNameIsOneArgument() {
         let command = ZFS.snapshot(dataset: "tank/my data", date: testDate, dateFormatter: dateFormatter, dateSeparator: "@")
-        XCTAssertEqual("zfs snapshot 'tank/my data@20220806-000000'", command)
+        XCTAssertEqual(.argv(executable: "zfs", arguments: ["snapshot", "tank/my data@20220806-000000"]), command.form)
+        XCTAssertEqual("zfs snapshot 'tank/my data@20220806-000000'", command.commandLine)
+    }
+
+    func testReceiveTarget() {
+        XCTAssertEqual("zfs recv -F tank/data@s1", ZFS.receive(target: "tank/data@s1").commandLine)
     }
 
     // MARK: - pool queries
 
-    func testPoolCapacityQuotesPool() {
-        XCTAssertEqual("zpool list -Hp -o capacity 'tank'", ZFS.poolCapacity(pool: "tank"))
+    func testPoolCapacityIsZpool() {
+        let command = ZFS.poolCapacity(pool: "tank")
+        XCTAssertEqual(.argv(executable: "zpool", arguments: ["list", "-Hp", "-o", "capacity", "tank"]), command.form)
+        XCTAssertEqual("zpool list -Hp -o capacity tank", command.commandLine)
     }
 
-    func testListUsedAvailableQuotesDataset() {
-        XCTAssertEqual("zfs list -Hp -o used,available 'tank'", ZFS.listUsedAvailable(dataset: "tank"))
+    func testListUsedAvailable() {
+        XCTAssertEqual("zfs list -Hp -o used,available tank", ZFS.listUsedAvailable(dataset: "tank").commandLine)
+    }
+
+    // MARK: - the Swift-side filter that replaced `| grep … || true`
+
+    func testMatchingIsAFixedSubstringFilter() {
+        let names = ["tank/data", "tank/data/docs", "tankish/data", "other"]
+        XCTAssertEqual(["tank/data", "tank/data/docs"], names.matching("tank/data"))
+        XCTAssertEqual(names, names.matching(nil))
+        XCTAssertEqual(names, names.matching(""))
+        XCTAssertEqual([], names.matching("tank/data."))  // a `.` is a literal, not a regex wildcard
+    }
+
+    // MARK: - ZFSRunner: read-only always runs, mutations honor execute
+
+    func testRunnerRunsReadOnlyCommandsOnADryRunAndHoldsMutations() async throws {
+        let recorder = RecordingShell { command in
+            command == "zfs list -o name -H" ? .success(stdout: "tank/data")! : nil
+        }
+        let runner = ZFSRunner(shell: recorder.shell, execute: false, stringEncoding: .utf8, lineSeparator: "\n")
+        let listed = try await runner.lines(ZFS.listDatasets())
+        XCTAssertEqual(["tank/data"], listed)
+        let destroyed = try await runner.run(ZFS.destroy(subject: "tank/data@s1"))
+        XCTAssertEqual("zfs destroy tank/data@s1\n", try destroyed.decodeString().stdoutTyped)
+        XCTAssertEqual(["zfs list -o name -H"], recorder.executed)
+        XCTAssertEqual(["zfs destroy tank/data@s1"], recorder.dryRuns)
+    }
+
+    func testRunnerExecutesMutationsWhenExecuting() async throws {
+        let recorder = RecordingShell { _ in nil }
+        let runner = ZFSRunner(shell: recorder.shell, execute: true, stringEncoding: .utf8, lineSeparator: "\n")
+        _ = try await runner.run(ZFS.destroy(subject: "tank/data@s1"))
+        XCTAssertEqual(["zfs destroy tank/data@s1"], recorder.executed)
+        XCTAssertEqual([], recorder.dryRuns)
     }
 }

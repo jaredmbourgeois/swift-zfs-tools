@@ -14,20 +14,25 @@ import Shell
 /// land on the destination.
 public struct Syncer: Sendable {
     private let config: Syncer.Config
-    private let shell: ShellAtPath
-    private let sshLogin: String
+    private let runner: ZFSRunner
+    /// `-p <port> -i <key> <user>@<host>` — ssh's arguments; `remote(_:)` appends the remote command
+    /// line as one more argument.
+    private let sshLogin: [String]
 
-    /// Builds the `ssh` login from `config` (shell-quoted); `shell` runs the commands (inject a mock
-    /// to test).
+    /// Builds the `ssh` login from `config`; `shell` runs the commands (inject a mock to test).
     public init(
         config: Syncer.Config,
         dateFormatter: DateFormatter,
         shell: ShellAtPath
     ) {
         self.config = config
-        self.shell = shell
-        sshLogin =
-            "ssh -p \(config.sshPort.shellQuoted) -i \(config.sshKeyPath.shellQuoted) \(config.sshUser.shellQuoted)@\(config.sshIP.shellQuoted)"
+        runner = ZFSRunner(
+            shell: shell,
+            execute: config.execute,
+            stringEncoding: config.stringEncoding,
+            lineSeparator: config.lineSeparator
+        )
+        sshLogin = ["-p", config.sshPort, "-i", config.sshKeyPath, "\(config.sshUser)@\(config.sshIP)"]
     }
 
     /// Replicate every matching dataset: destroy remote-only snapshots, then send the dataset's new
@@ -44,23 +49,17 @@ public struct Syncer: Sendable {
         for dataset in datasets {
             if config.pruneRemoteSnapshots {
                 for snapshotToDelete in dataset.snapshotsRemoteToDelete {
-                    _ = try await shell.execute(
-                        remote(ZFS.destroy(subject: snapshotToDelete.name)),
-                        dryRun: !config.execute
-                    ).get()
+                    _ = try await runner.run(remote(ZFS.destroy(subject: snapshotToDelete.name)))
                 }
             }
             guard let newest = dataset.snapshotsToSend.last else { continue }
             for step in Self.sendSteps(base: dataset.base, owed: dataset.snapshotsToSend) {
-                _ = try await shell.execute(
-                    sendCommand(for: step, sendRateLimitPipe: sendRateLimitPipe),
-                    dryRun: !config.execute
-                ).get()
+                _ = try await runner.run(sendCommand(for: step, sendRateLimitPipe: sendRateLimitPipe))
             }
             // Once per dataset, after every step landed. A step that fails throws before this, so
             // the bookmark never claims a snapshot the destination does not hold; the next run then
             // starts from whatever the destination does hold (its newest common snapshot).
-            try await advanceBookmark(to: newest)
+            try await advanceBookmark(to: newest, existingBookmarks: dataset.bookmarkNames)
         }
     }
 
@@ -136,84 +135,56 @@ public struct Syncer: Sendable {
         return true
     }
 
-    private func advanceBookmark(to snapshot: SnapshotRecord) async throws {
+    /// Move the dataset's sent-bookmark to `snapshot` through a `.tmp` bookmark, so a crash between
+    /// the steps leaves either the old bookmark or the new one, never none. `existingBookmarks` (the
+    /// run's own listing) says which of the two already exist, so a destroy is issued only for a
+    /// bookmark that is there — no `|| true` to swallow a real failure.
+    private func advanceBookmark(to snapshot: SnapshotRecord, existingBookmarks: [String]) async throws {
         guard let sentBookmarkName = config.sentBookmarkName else { return }
         let bookmark = "\(snapshot.dataset)#\(sentBookmarkName)"
         let temporaryBookmark = "\(bookmark).tmp"
-        _ = try await shell.execute(
-            "\(ZFS.destroy(subject: temporaryBookmark)) || true",
-            dryRun: !config.execute
-        ).get()
-        _ = try await shell.execute(
-            ZFS.bookmark(snapshot: snapshot.name, bookmark: temporaryBookmark),
-            dryRun: !config.execute
-        ).get()
-        _ = try await shell.execute(
-            "\(ZFS.destroy(subject: bookmark)) || true",
-            dryRun: !config.execute
-        ).get()
-        _ = try await shell.execute(
-            ZFS.bookmark(snapshot: snapshot.name, bookmark: bookmark),
-            dryRun: !config.execute
-        ).get()
-        _ = try await shell.execute(
-            "\(ZFS.destroy(subject: temporaryBookmark)) || true",
-            dryRun: !config.execute
-        ).get()
+        if existingBookmarks.contains(temporaryBookmark) {
+            _ = try await runner.run(ZFS.destroy(subject: temporaryBookmark))
+        }
+        _ = try await runner.run(ZFS.bookmark(snapshot: snapshot.name, bookmark: temporaryBookmark))
+        if existingBookmarks.contains(bookmark) {
+            _ = try await runner.run(ZFS.destroy(subject: bookmark))
+        }
+        _ = try await runner.run(ZFS.bookmark(snapshot: snapshot.name, bookmark: bookmark))
+        _ = try await runner.run(ZFS.destroy(subject: temporaryBookmark))
     }
 
-    private func sendCommand(for step: SendStep, sendRateLimitPipe: String?) -> String {
-        var zfsSend = "zfs send -v"
+    /// The one shell pipeline the tool runs: `zfs send … | [pv …] | ssh … 'zfs recv -F <target>'`.
+    /// Each stage is rendered from argv, so a name is quoted only when it needs quoting.
+    private func sendCommand(for step: SendStep, sendRateLimitPipe: String?) -> ZFSCommand {
+        var zfsSend = ["zfs", "send", "-v"]
         if let from = step.from {
-            zfsSend += step.kind == .intermediary ? " -I " : " -i "
-            zfsSend += from.shellQuoted
+            zfsSend += [step.kind == .intermediary ? "-I" : "-i", from]
         }
-        zfsSend += " \(step.to.name.shellQuoted)"
+        zfsSend.append(step.to.name)
 
         // A single-snapshot stream lands as the named snapshot. A multi-snapshot (`-I`) stream must
         // name the DATASET: ZFS refuses a snapshot name for it ("cannot specify snapshot name for
         // multi-snapshot stream"), and each snapshot in it arrives under its own name.
         let receiveTarget = step.kind == .intermediary ? step.to.dataset : step.to.name
-        var command = "set -o pipefail; \(zfsSend)"
+        var stages = [zfsSend.shellCommandLine]
         if let sendRateLimitPipe {
-            command += " | \(sendRateLimitPipe)"
+            stages.append(sendRateLimitPipe)
         }
-        command += " | \(remote("zfs recv -F \(forwardPath(receiveTarget).shellQuoted)"))"
-        return command
+        stages.append(remote(ZFS.receive(target: forwardPath(receiveTarget))).commandLine)
+        return ZFSCommand(form: .shell("set -o pipefail; " + stages.joined(separator: " | ")), effect: .mutating)
     }
 
     private func datasets() async throws -> [DatasetSnapshotOperation] {
-        // Three parallel listings (2 local + 1 remote SSH). All read-only at the
-        // ZFS layer; the parallelism is meaningful when the remote SSH RTT is
-        // high. Safe under swift-shell 2.0.0; 1.2.3 c21a673 serialized this as a
-        // workaround for the pre-1.4.1 swift-shell pipe-drain race that lost
-        // stdout under parallel use, fixed in swift-shell 1.4.1.
-        async let datasetsLocalBinding: [String] = try await shell.lines(
-            ZFS.listDatasets(grepping: config.datasetGrep),
-            dryRun: !config.execute,
-            encoding: config.stringEncoding,
-            lineSeparator: config.lineSeparator
-        )
-        async let snapshotsLocalBinding: [String] = try await shell.lines(
-            ZFS.listSnapshotRecords(grepping: config.datasetGrep),
-            dryRun: !config.execute,
-            encoding: config.stringEncoding,
-            lineSeparator: config.lineSeparator
-        )
-        // Remote datasets carry the path transform; grep with the transformed pattern so the
-        // remote-side `zfs list` output actually matches. The grep runs locally, outside the
-        // quoted ssh argument (see `remote`) — the remote shell only ever sees the bare listing,
-        // which is the exact shape `ReceiveGuardPolicy` whitelists.
-        var remoteSnapshotRecordsListCommand = remote(ZFS.listSnapshotRecords())
-        if let remoteDatasetGrep {
-            remoteSnapshotRecordsListCommand += " | grep \(remoteDatasetGrep.shellQuoted) || true"
-        }
-        async let snapshotsRemoteRawBinding: [String] = try await shell.lines(
-            remoteSnapshotRecordsListCommand,
-            dryRun: !config.execute,
-            encoding: config.stringEncoding,
-            lineSeparator: config.lineSeparator
-        )
+        // Three parallel listings (2 local + 1 remote SSH), all read-only at the ZFS layer; the
+        // parallelism matters when the remote SSH round trip is slow. Each listing is the bare
+        // command — the remote one is exactly the shape `ReceiveGuardPolicy` whitelists — and the
+        // dataset filter is applied here, on parsed names.
+        let listLocalCommand = ZFS.listSnapshotRecords()
+        let listRemoteCommand = remote(ZFS.listSnapshotRecords())
+        async let datasetsLocalBinding: [String] = try await runner.lines(ZFS.listDatasets()).matching(config.datasetGrep)
+        async let snapshotsLocalBinding: [String] = try await runner.lines(listLocalCommand)
+        async let snapshotsRemoteRawBinding: [String] = try await runner.lines(listRemoteCommand)
         let (
             datasetsLocal,
             snapshotsLocal,
@@ -223,16 +194,18 @@ public struct Syncer: Sendable {
             snapshotsLocalBinding,
             snapshotsRemoteRawBinding
         )
-        let listLocalCommand = ZFS.listSnapshotRecords(grepping: config.datasetGrep)
-        let snapshotsLocalRecords = try snapshotsLocal.map {
-            try SnapshotRecord.parse($0, command: listLocalCommand)
-        }
-        // Reverse-transform remote snapshot names into local form so all internal comparisons
-        // run in a single namespace. Forward-transform happens at the wire boundary in sync().
-        let snapshotsRemoteRecords = try snapshotsRemoteRaw.map { line in
-            let record = try SnapshotRecord.parse(line, command: remoteSnapshotRecordsListCommand)
-            return RemoteSnapshotRecord(local: record.withName(reversePath(record.name)), remote: record)
-        }
+        let snapshotsLocalRecords = try snapshotsLocal
+            .map { try SnapshotRecord.parse($0, command: listLocalCommand.commandLine) }
+            .filter { Self.matches($0.name, config.datasetGrep) }
+        // Remote names carry the path transform, so they are filtered with the transformed pattern,
+        // then reverse-transformed into local form so every comparison runs in one namespace. The
+        // forward transform happens at the wire boundary in sync().
+        let snapshotsRemoteRecords = try snapshotsRemoteRaw
+            .map { try SnapshotRecord.parse($0, command: listRemoteCommand.commandLine) }
+            .filter { Self.matches($0.name, remoteDatasetGrep) }
+            .map { record in
+                RemoteSnapshotRecord(local: record.withName(reversePath(record.name)), remote: record)
+            }
         let bookmarksLocalRecords = try await listBookmarkRecords()
         return try await withThrowingTaskGroup(of: DatasetSnapshotOperation.self) {
             taskGroup in
@@ -276,7 +249,8 @@ public struct Syncer: Sendable {
                         dataset: dataset,
                         base: base,
                         snapshotsToSend: snapshotsLocalAfterLastCommonRemote,
-                        snapshotsRemoteToDelete: snapshotsRemoteDeletedFromLocal
+                        snapshotsRemoteToDelete: snapshotsRemoteDeletedFromLocal,
+                        bookmarkNames: bookmarksLocalRecords.filter { $0.bookmarkDataset == dataset }.map(\.name)
                     )
                 }
             }
@@ -289,17 +263,18 @@ public struct Syncer: Sendable {
         }
     }
 
-    /// Prefixes `command` with the ssh login so it runs on the remote host.
-    ///
-    /// The remote command line becomes one locally-quoted argument (`shellQuoted`), so the *remote*
-    /// shell receives exactly the intended command line: dataset/snapshot names with spaces (legal
-    /// in ZFS) reach `zfs` intact instead of being re-split by the remote shell, and the local
-    /// shell can't word-split or glob any part of the command. Pass only the bare remote command —
-    /// a local pipeline (e.g. `| grep … || true`) must stay outside the quotes, appended by the
-    /// caller. `ReceiveGuardPolicy` depends on the bare form: it whitelists the exact
-    /// `SSH_ORIGINAL_COMMAND` strings a guarded receiver sees.
-    private func remote(_ command: String) -> String {
-        "\(sshLogin) \(command.shellQuoted)"
+    /// The same command run on the remote host: `ssh <login> '<command line>'`, the remote command
+    /// line as ONE ssh argument. The remote shell then receives exactly that line — a dataset name
+    /// with a space (legal in ZFS) reaches `zfs` intact — and it is exactly the `SSH_ORIGINAL_COMMAND`
+    /// a receive-guard validates (`ReceiveGuardPolicy`); the effect is the inner command's.
+    private func remote(_ command: ZFSCommand) -> ZFSCommand {
+        ZFSCommand(form: .argv(executable: "ssh", arguments: sshLogin + [command.commandLine]), effect: command.effect)
+    }
+
+    /// Whether a snapshot or dataset `name` holds `pattern` as a fixed substring (`nil`/empty: all).
+    private static func matches(_ name: String, _ pattern: String?) -> Bool {
+        guard let pattern, !pattern.isEmpty else { return true }
+        return name.contains(pattern)
     }
 
     /// Forward-transform a local-form path/snapshot to its remote-form equivalent.
@@ -327,16 +302,14 @@ public struct Syncer: Sendable {
         return forwardPath(grep)
     }
 
+    /// The sent-bookmarks (`dataset#<sentBookmarkName>`, and any `.tmp` a crashed run left), from one
+    /// bookmark listing filtered here.
     private func listBookmarkRecords() async throws -> [SnapshotRecord] {
         guard let sentBookmarkName = config.sentBookmarkName else { return [] }
-        let command = ZFS.listBookmarkRecords(grepping: "#\(sentBookmarkName)")
-        return try await shell.lines(
-            command,
-            dryRun: !config.execute,
-            encoding: config.stringEncoding,
-            lineSeparator: config.lineSeparator
-        )
-        .map { try SnapshotRecord.parse($0, command: command) }
+        let command = ZFS.listBookmarkRecords()
+        return try await runner.lines(command)
+            .map { try SnapshotRecord.parse($0, command: command.commandLine) }
+            .filter { $0.name.contains("#\(sentBookmarkName)") }
     }
 
     private static func applyPathTransform(_ input: String, strip: String?, add: String?) -> String
@@ -368,7 +341,7 @@ public struct Syncer: Sendable {
                     "expected a positive byte count with an optional K/M/G/T/P/E/Z/Y suffix, e.g. 20M"
             )
         }
-        return "pv -q -L \(sendRateLimit.shellQuoted)"
+        return ["pv", "-q", "-L", sendRateLimit].shellCommandLine
     }
 
     private static func isValidSendRateLimit(_ sendRateLimit: String) -> Bool {
@@ -524,6 +497,8 @@ extension Syncer {
         /// Local snapshots newer than `base`, ascending by createtxg.
         let snapshotsToSend: [SnapshotRecord]
         let snapshotsRemoteToDelete: [SnapshotRecord]
+        /// The dataset's sent-bookmarks that exist now (`dataset#name`, maybe `dataset#name.tmp`).
+        let bookmarkNames: [String]
     }
 
     private struct RemoteSnapshotRecord {

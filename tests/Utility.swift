@@ -73,6 +73,37 @@ final class InMemoryFileStore: Sendable {
     }
 }
 
+/// A mock shell that records every call with its `dryRun` flag. `answers` returns the canned result
+/// for a command line that runs, or nil for a plain success; a dry-run call never consults it and
+/// returns `ShellResult.dryRun(command:)` — what the real engine returns without spawning. Argv calls
+/// reach it as their rendered line (`shellCommandLine`), the same string the real engine reports.
+final class RecordingShell: Sendable {
+    struct Invocation: Equatable, Sendable {
+        let command: String
+        let dryRun: Bool
+    }
+
+    private let invocations = Locked<[Invocation]>([])
+    let shell: ShellAtPath
+
+    init(answers: @escaping @Sendable (String) -> ShellResult<ShellAtPathError>?) {
+        let invocations = self.invocations
+        shell = ShellAtPath { @Sendable command, dryRun, _, _, _, _, _ in
+            invocations.withLock { $0.append(Invocation(command: command, dryRun: dryRun)) }
+            if dryRun {
+                return .dryRun(command: command)
+            }
+            return answers(command) ?? .success()
+        }
+    }
+
+    var all: [Invocation] { invocations.withLock { $0 } }
+    /// The command lines that ran (dryRun false), in order.
+    var executed: [String] { all.filter { !$0.dryRun }.map(\.command) }
+    /// The command lines a dry run held back, in order.
+    var dryRuns: [String] { all.filter(\.dryRun).map(\.command) }
+}
+
 extension FileSystem {
     static func inMemory(_ store: InMemoryFileStore) -> FileSystem {
         FileSystem(

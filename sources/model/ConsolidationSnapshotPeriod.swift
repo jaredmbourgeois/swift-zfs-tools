@@ -101,6 +101,9 @@ extension Consolidator.SnapshotConsolidationSchedule {
             every everyMultiple: UInt16,
             _ everyPeriod: Consolidator.SnapshotConsolidationPeriodType
         ) -> Consolidator.SnapshotConsolidationSchedule {
+            // The same floor the decoder enforces: a zero never advances the window, or yields an
+            // invalid `1...0` range. A builder is code, so a zero here is a programmer error.
+            precondition(everyMultiple > 0 && snapshots > 0, "a consolidation band needs everyMultiple ≥ 1 and snapshots ≥ 1")
             periods.append(
                 .init(
                     everyMultiple: everyMultiple,
@@ -121,6 +124,7 @@ extension Consolidator.SnapshotConsolidationSchedule {
             _ everyPeriod: Consolidator.SnapshotConsolidationPeriodType,
             repeatedBy repetitions: UInt16 = 1
         ) -> Self {
+            precondition(everyMultiple > 0 && snapshots > 0, "a consolidation band needs everyMultiple ≥ 1 and snapshots ≥ 1")
             periods.append(
                 .init(
                     everyMultiple: everyMultiple,

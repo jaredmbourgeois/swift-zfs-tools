@@ -27,7 +27,7 @@ final class SnapshotterTest: XCTestCase {
             "nas_12tb/nas/documents",
             "nas_12tb/nas/media",
         ]
-        let snapshotNasCommand = "zfs snapshot -r '\(datasets[0])\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))'"
+        let snapshotNasCommand = "zfs snapshot -r \(datasets[0])\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))"
         let expectSnapshotNas = expectation(description: "expect snapshot \(datasets[0])")
         let shell = ShellAtPath {
             @Sendable (
@@ -40,7 +40,7 @@ final class SnapshotterTest: XCTestCase {
                 _ timeout: TimeInterval?
             ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep '\(SnapshotterConfigTest.defaultDataset)' || true":
+            case "zfs list -o name -H":
                 return .success(
                     stdout: datasets.joined(separator: Defaults.lineSeparator)
                 )!
@@ -75,7 +75,7 @@ final class SnapshotterTest: XCTestCase {
         )
         let includedDataset = "nas_12tb/nas/documents"
         let excludedDataset = "nas_12tb/nas/received/postgres"
-        let snapshotIncludedCommand = "zfs snapshot '\(includedDataset)\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))'"
+        let snapshotIncludedCommand = "zfs snapshot \(includedDataset)\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))"
         let expectSnapshotIncluded = expectation(description: "expect snapshot included dataset")
         let shell = ShellAtPath {
             @Sendable (
@@ -88,7 +88,7 @@ final class SnapshotterTest: XCTestCase {
                 _ timeout: TimeInterval?
             ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep '\(SnapshotterConfigTest.defaultDataset)' || true":
+            case "zfs list -o name -H":
                 return .success(stdout: [includedDataset, excludedDataset].joined(separator: Defaults.lineSeparator))!
             case snapshotIncludedCommand:
                 expectSnapshotIncluded.fulfill()
@@ -117,8 +117,8 @@ final class SnapshotterTest: XCTestCase {
         let includedParent = "nas_12tb/nas"
         let includedChild = "nas_12tb/nas/documents"
         let excludedChild = "nas_12tb/nas/received/postgres"
-        let snapshotParentCommand = "zfs snapshot '\(includedParent)\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))'"
-        let snapshotChildCommand = "zfs snapshot '\(includedChild)\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))'"
+        let snapshotParentCommand = "zfs snapshot \(includedParent)\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))"
+        let snapshotChildCommand = "zfs snapshot \(includedChild)\(Defaults.dateSeparator)\(dateFormatter.string(from: snapshotDate))"
         let expectSnapshotParent = expectation(description: "expect snapshot parent without -r")
         let expectSnapshotChild = expectation(description: "expect snapshot child without -r")
         let shell = ShellAtPath {
@@ -132,7 +132,7 @@ final class SnapshotterTest: XCTestCase {
                 _ timeout: TimeInterval?
             ) async -> ShellResult in
             switch command {
-            case "zfs list -o name -H | grep '\(SnapshotterConfigTest.defaultDataset)' || true":
+            case "zfs list -o name -H":
                 return .success(stdout: [includedParent, includedChild, excludedChild].joined(separator: Defaults.lineSeparator))!
             case snapshotParentCommand:
                 expectSnapshotParent.fulfill()
