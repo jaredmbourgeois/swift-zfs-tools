@@ -13,12 +13,15 @@ jobs:
   test:
     # The fleet's ci-forgejo runner (serverJMB; a Debian 13 nspawn machine in host mode). Swift is
     # the runner's prewarmed toolchain (~/workstation scripts/provision/setup_forgejo_actions_runner.sh),
-    # not something this job installs. Package.swift resolves swift-shell from its GitHub mirror at
-    # an exact tag, so this job is green only once that tag is mirrored (workstation
-    # `oss-github-mirror-path`) — the same gate the fleet build has.
+    # not something this job installs.
     # The runner's label is `debian-13:host`; a job names the label without its `:host` schema suffix.
     runs-on: debian-13
     steps:
       - uses: actions/checkout@v4
       - run: swift --version
+      # Package.swift names swift-shell by its public GitHub URL, which is a push-mirror of this
+      # Forgejo. The job resolves it from the origin instead — the same SwiftPM mirror map the fleet
+      # build writes — so a stale mirror or an unreachable GitHub never decides this job. The
+      # instance URL comes from the run's own context; nothing here names an address.
+      - run: swift package config set-mirror --original https://github.com/jaredmbourgeois/swift-shell.git --mirror "${{ github.server_url }}/${{ github.repository_owner }}/swift-shell.git"
       - run: swift test
