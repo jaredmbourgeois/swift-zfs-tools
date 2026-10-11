@@ -13,7 +13,7 @@ import ZFSToolsModel
 //   command="/usr/local/bin/zfs-tools receive-guard --pool <pool>",restrict,from="<sender-ip>"
 // so that key can run ONLY the `zfs recv/list/destroy` a `sync` sender issues, scoped to <pool>.
 // The client's real command arrives in $SSH_ORIGINAL_COMMAND; ReceiveGuardPolicy validates it,
-// and an approved command is exec'd DIRECTLY (no shell), inheriting this process's stdio so the
+// and an approved command is exec'd DIRECTLY (no shell), on this process's own stdio so the
 // `zfs recv` stream flows straight through.
 struct ReceiveGuard: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -26,30 +26,20 @@ struct ReceiveGuard: ParsableCommand {
     var pool: String
 
     func run() throws {
-        let originalCommand = ProcessInfo.processInfo.environment["SSH_ORIGINAL_COMMAND"] ?? ""
+        let root = try CommandRoot.readingThisProcess()
+        // sshd sets the variable only when the client asked for a command; a login with none reads
+        // as the empty command, which the policy rejects.
+        let originalCommand = root.environment["SSH_ORIGINAL_COMMAND"] ?? ""
         switch ReceiveGuardPolicy(pool: pool).validate(originalCommand) {
         case .failure(let rejection):
-            FileHandle.standardError.write(Data("receive-guard: rejected (\(rejection))\n".utf8))
+            root.diagnostics("receive-guard: rejected (\(rejection))")
             throw ExitCode(126)  // 126 = command found but not permitted, per shell convention
         case .success(let argv):
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: Self.resolveZfsPath())
-            process.arguments = Array(argv.dropFirst())  // argv[0] is "zfs"; pass the rest
-            // stdin/stdout/stderr are inherited from this process (the SSH channel) — the recv
-            // byte stream passes through untouched.
-            try process.run()
-            process.waitUntilExit()
-            throw ExitCode(process.terminationStatus)
+            let status = try root.runOnOwnStandardStreams(
+                executablePath: ReceiveGuardPolicy.zfsExecutablePath(isExecutableFile: root.fileSystem.isExecutableFile),
+                arguments: Array(argv.dropFirst())  // argv[0] is "zfs"; pass the rest
+            )
+            throw ExitCode(status)
         }
-    }
-
-    /// `zfs` lives in sbin on Debian/Ubuntu/Pop; probe the usual locations, fall back to the
-    /// canonical path (a wrong path just fails the exec — fail-closed).
-    private static func resolveZfsPath() -> String {
-        let candidates = ["/usr/sbin/zfs", "/sbin/zfs", "/usr/local/sbin/zfs"]
-        for candidate in candidates where FileManager.default.isExecutableFile(atPath: candidate) {
-            return candidate
-        }
-        return "/usr/sbin/zfs"
     }
 }

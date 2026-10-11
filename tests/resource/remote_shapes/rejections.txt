@@ -1,0 +1,22 @@
+rm -rf /
+zfs
+zfs create nas_12tb/evil
+zfs send nas_12tb/nas@20260506-014625
+zfs recv nas_12tb/nas
+zfs recv -F
+zfs recv -F nas_12tb/nas extra
+zfs recv -F -d nas_12tb/nas
+zfs recv -F rpool/secret
+zfs recv -F nas_12tb_evil/x
+zfs recv -F 'nas_12tb/nas
+zfs destroy rpool/x@s
+zfs destroy nas_12tb
+zfs destroy nas_12tb/nas
+zfs destroy -r nas_12tb/nas@20260506-014625
+zfs destroy nas_12tb/nas@20260501-000000%20260506-000000
+zfs destroy 'nas_12tb/nas@a,b'
+zfs destroy 'nas_12tb/nas#sent-serverMTB'
+zfs list -o name -H -t snapshot
+zfs list -t bookmark -H -p -o guid,createtxg,name -s createtxg
+zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg -r nas_12tb
+zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg ; rm -rf /

@@ -32,6 +32,9 @@ struct BuildCommand: AsyncParsableCommand {
 
             # If Swift isn't on the remote's PATH, point at it
             zfs-tools-build --remote user@buildhost --swift /path/to/swift
+
+            # Run the remote swift commands through a wrapper (the prefix is the last option)
+            zfs-tools-build --remote buildhost --remote-command-prefix sudo -n my-wrapper
             """,
         version: ToolVersion.current
     )
@@ -39,8 +42,26 @@ struct BuildCommand: AsyncParsableCommand {
     @OptionGroup
     var arguments: Arguments.Build
 
+    // The builder's composition root, and the one place in this target that names a platform
+    // accessor or a live value: it reads this process once and hands the values down.
     func run() async throws {
-        let shell = ShellAtPath.loggingToStdout(toolName: "zfs-tools-build")
-        try await Builder(config: .init(arguments: arguments), shell: shell).build()
+        let environment = ProcessInfo.processInfo.environment  // reach-ok: the builder's own environment, given to its ssh, rsync and swift children
+        let workingDirectory = try validatedWorkingDirectory(
+            FileManager.default.currentDirectoryPath  // reach-ok: the builder's own working directory: the children's, and the default source directory
+        )
+        let observer = ShellLogFormatter(
+            toolName: "zfs-tools-build",
+            lineSeparator: Defaults.lineSeparator,
+            stringEncoding: Defaults.stringEncoding
+        ).resultObserver(write: { entry in print(entry) })  // reach-ok: stdout, where every command is printed as it runs
+        let shell = ShellAtPath.live(
+            shellPath: Defaults.shellPath,
+            environment: environment,
+            workingDirectory: workingDirectory,
+            terminationGracePeriod: Defaults.shellTerminationGracePeriod,
+            shellObserver: observer,
+            stringEncoding: Defaults.stringEncoding
+        )
+        try await Builder(config: .init(arguments: arguments, workingDirectory: workingDirectory), shell: shell).build()
     }
 }

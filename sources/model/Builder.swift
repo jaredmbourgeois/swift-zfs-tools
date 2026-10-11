@@ -49,6 +49,13 @@ enum Build {
         return command
     }
 
+    /// `command` — a program and its arguments — run through `prefix`, the words of a wrapper that
+    /// takes a command to run (`sudo -n my-build-wrapper`). Each word is quoted like every other
+    /// interpolated value. An empty prefix leaves the command as it is.
+    static func runThrough(prefix: [String], _ command: String) -> String {
+        (prefix.map(\.shellQuoted) + [command]).joined(separator: " ")
+    }
+
     /// Run `command` on `ssh` (an ssh destination or config alias). The *whole* command is quoted so
     /// it survives the remote shell's re-parse intact — the opposite of `Syncer.remote`, which keeps a
     /// pipe on the local side.
@@ -74,9 +81,10 @@ enum Build {
 }
 
 /// Builds the `zfs-tools` executable and drops the binary into `bin/<platform>/` — locally, or on a
-/// remote host over SSH (rsync up → `swift build` → copy the artifact back → clean up). The target
-/// platform is derived at the build site via `uname` (overridable). Injectable `shell` makes the whole
-/// orchestration unit-testable, mirroring `Syncer`.
+/// remote host over SSH (rsync up → `swift build` → copy the artifact back → clean up), where the
+/// `swift` commands can be run through a prefix the caller names. The target platform is derived at
+/// the build site via `uname` (overridable). Injectable `shell` makes the whole orchestration
+/// unit-testable, mirroring `Syncer`.
 public struct Builder: Sendable {
     private let config: Config
     private let shell: ShellAtPath
@@ -113,8 +121,7 @@ public struct Builder: Sendable {
         }
         let unameCommand =
             config.remote.map { Build.remote(ssh: $0, command: Build.uname()) } ?? Build.uname()
-        let lines = try await shell.lines(
-            unameCommand, dryRun: false, encoding: .utf8, lineSeparator: "\n")
+        let lines = try await shell.lines(unameCommand, encoding: .utf8, lineSeparator: "\n")
         guard lines.count >= 2,
             let platform = BuildPlatform.directoryName(unameS: lines[0], unameM: lines[1])
         else {
@@ -150,22 +157,28 @@ public struct Builder: Sendable {
                 excludes: Self.rsyncExcludes
             )
         )
+        // Only the two `swift` invocations go through the prefix: they are the build. The prefix
+        // sits inside the `cd`, so the wrapped command starts in the build directory.
         try await run(
             Build.remote(
                 ssh: remote,
                 command: Build.inDirectory(
                     temp,
-                    run: Build.swiftBuild(
-                        swift: config.swift, configuration: config.configuration,
-                        staticSwiftStdlib: config.staticSwiftStdlib))
+                    run: Build.runThrough(
+                        prefix: config.remoteCommandPrefix,
+                        Build.swiftBuild(
+                            swift: config.swift, configuration: config.configuration,
+                            staticSwiftStdlib: config.staticSwiftStdlib)))
             ))
         let binPath = try await lastLine(
             Build.remote(
                 ssh: remote,
                 command: Build.inDirectory(
                     temp,
-                    run: Build.swiftBinPath(
-                        swift: config.swift, configuration: config.configuration))))
+                    run: Build.runThrough(
+                        prefix: config.remoteCommandPrefix,
+                        Build.swiftBinPath(
+                            swift: config.swift, configuration: config.configuration)))))
         try await run(Build.makeDirectory(parentDirectory(of: destination)))
         try await run(Build.scp(from: "\(remote):\(binPath)/\(Self.productName)", to: destination))
         if !config.keepTempDirectory {
@@ -174,13 +187,18 @@ public struct Builder: Sendable {
     }
 
     private func run(_ command: String) async throws {
-        _ = try await shell.execute(command, dryRun: false).get()
+        // Exit 0 is the one success; nothing is written to stdin; a build is not timed out.
+        _ = try await shell.execute(
+            command,
+            statusesForResult: .exitZeroSucceedsSIGTERMCancels(),
+            stream: nil,
+            timeout: nil
+        ).get()
     }
 
     /// Run `command` and return its last non-empty stdout line (the `--show-bin-path` path).
     private func lastLine(_ command: String) async throws -> String {
-        let lines = try await shell.lines(
-            command, dryRun: false, encoding: .utf8, lineSeparator: "\n")
+        let lines = try await shell.lines(command, encoding: .utf8, lineSeparator: "\n")
         guard
             let line = lines.last(where: {
                 !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -191,16 +209,22 @@ public struct Builder: Sendable {
         return line.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// The directory holding `path`, as an absolute path. A relative `path` is read against the
+    /// working directory the config was handed — the directory the commands run in — never against
+    /// whatever this process's own happens to be.
     private func parentDirectory(of path: String) -> String {
-        URL(fileURLWithPath: path).deletingLastPathComponent().path
+        let workingDirectory = URL(fileURLWithPath: config.workingDirectory, isDirectory: true)
+        return URL(fileURLWithPath: path, relativeTo: workingDirectory).deletingLastPathComponent().path
     }
 
+    /// The directory is `rm -rf`'d after a remote build, so its last component must be a dedicated
+    /// build-directory name — relative or absolute: a relative `Documents` is the remote home's
+    /// `Documents` just as surely as `/home/x/Documents` is.
     private static func validateTempDirectory(_ path: String) throws {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         let unsafePaths = ["", "/", ".", ".."]
         let pathComponents = trimmed.split(separator: "/").map(String.init)
         let basename = pathComponents.last ?? ""
-        let isAbsolute = trimmed.hasPrefix("/")
         guard !unsafePaths.contains(trimmed), !trimmed.hasPrefix("../"), !trimmed.hasSuffix("/.."), !trimmed.contains("/../"), !trimmed.hasPrefix("~/") else {
             throw ErrorType.invalidArgument(
                 name: "tempDirectory",
@@ -208,21 +232,24 @@ public struct Builder: Sendable {
                 reason: "expected a non-root build directory without parent-directory components"
             )
         }
-        guard !isAbsolute || basename.contains("zfs-tools-build") else {
+        guard basename.contains("zfs-tools-build") else {
             throw ErrorType.invalidArgument(
                 name: "tempDirectory",
                 value: path,
-                reason: "expected an absolute build directory basename containing zfs-tools-build"
+                reason: "expected a build directory basename containing zfs-tools-build"
             )
         }
     }
 }
 
 extension Builder {
-    /// Inputs for a build run. `destination` defaults to `<sourceDirectory>/bin/<platform>/zfs-tools`;
-    /// `platformOverride` bypasses `uname` derivation; `remote` nil means build on this host.
+    /// Inputs for a build run. `destination` nil means `<sourceDirectory>/bin/<platform>/zfs-tools`;
+    /// `platformOverride` bypasses `uname` derivation; `remote` nil means build on this host;
+    /// `remoteCommandPrefix` is the words a remote build's `swift` commands run through (empty: none);
+    /// `workingDirectory` is the directory the commands run in, which a relative path is read against.
     public struct Config: Sendable {
         public let remote: String?
+        public let remoteCommandPrefix: [String]
         public let sourceDirectory: String
         public let tempDirectory: String
         public let destination: String?
@@ -231,9 +258,11 @@ extension Builder {
         public let configuration: String
         public let keepTempDirectory: Bool
         public let staticSwiftStdlib: Bool
+        public let workingDirectory: String
 
         public init(
             remote: String?,
+            remoteCommandPrefix: [String],
             sourceDirectory: String,
             tempDirectory: String,
             destination: String?,
@@ -241,9 +270,11 @@ extension Builder {
             swift: String,
             configuration: String,
             keepTempDirectory: Bool,
-            staticSwiftStdlib: Bool
+            staticSwiftStdlib: Bool,
+            workingDirectory: String
         ) {
             self.remote = remote
+            self.remoteCommandPrefix = remoteCommandPrefix
             self.sourceDirectory = sourceDirectory
             self.tempDirectory = tempDirectory
             self.destination = destination
@@ -252,11 +283,15 @@ extension Builder {
             self.configuration = configuration
             self.keepTempDirectory = keepTempDirectory
             self.staticSwiftStdlib = staticSwiftStdlib
+            self.workingDirectory = workingDirectory
         }
 
-        public init(arguments: Arguments.Build) {
+        /// `workingDirectory` is the builder's own, read once at its composition root: it is what
+        /// "the current directory" means for an omitted `--source-dir`.
+        public init(arguments: Arguments.Build, workingDirectory: String) {
             remote = arguments.remote
-            sourceDirectory = arguments.sourceDir ?? FileManager.default.currentDirectoryPath
+            remoteCommandPrefix = arguments.remoteCommandPrefix
+            sourceDirectory = arguments.sourceDir ?? workingDirectory
             // Relative path: resolved against the remote home directory (ssh's default cwd). A
             // leading `~` can't be used here — it's single-quoted into the command and wouldn't
             // expand. Pass an absolute `--temp-dir` to put it elsewhere.
@@ -267,6 +302,7 @@ extension Builder {
             configuration = arguments.configuration ?? "release"
             keepTempDirectory = arguments.keepTemp
             staticSwiftStdlib = arguments.staticSwiftStdlib
+            self.workingDirectory = workingDirectory
         }
     }
 }

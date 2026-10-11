@@ -8,25 +8,25 @@
 import Foundation
 
 /// A `Sendable` witness over the file operations this tool needs, expressed as `@Sendable`
-/// closures — the same dependency-injection idiom as `Shell`/`ShellExecute`. Production code
-/// uses `.live` (backed by `FileManager` / `Data`); tests inject an in-memory implementation
-/// so config read/write paths are unit-testable without touching the disk.
+/// closures — the same dependency-injection idiom as `Shell`/`ShellExecute`. A composition root
+/// hands down the live one (FileSystemLive.swift); a test hands down the same operations rooted in
+/// a temporary directory it created, so the config read/write paths are tested against a real file
+/// system without touching anything outside that directory.
 public struct FileSystem: Sendable {
+    /// The bytes of the file at `path`, or `nil` when no readable file is there.
     public let contents: @Sendable (_ path: String) -> Data?
+    /// Replaces the file at `path` with `data`, or throws why it could not.
     public let write: @Sendable (_ data: Data, _ path: String) throws -> Void
+    /// Whether `path` names a file this process may execute — how `receive-guard` finds `zfs`.
+    public let isExecutableFile: @Sendable (_ path: String) -> Bool
 
     public init(
         contents: @escaping @Sendable (_ path: String) -> Data?,
-        write: @escaping @Sendable (_ data: Data, _ path: String) throws -> Void
+        write: @escaping @Sendable (_ data: Data, _ path: String) throws -> Void,
+        isExecutableFile: @escaping @Sendable (_ path: String) -> Bool
     ) {
         self.contents = contents
         self.write = write
+        self.isExecutableFile = isExecutableFile
     }
-
-    public static let live = FileSystem(
-        contents: { FileManager.default.contents(atPath: $0) },
-        // `.atomic` writes to a temp file and renames into place, so an interrupted write can't
-        // leave a truncated / corrupt config behind.
-        write: { data, path in try data.write(to: URL(fileURLWithPath: path), options: .atomic) }
-    )
 }

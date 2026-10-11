@@ -17,30 +17,39 @@ public struct Consolidator: Sendable {
     private let config: Config
     private let date: @Sendable () -> Date
     private let dateFormatter: DateFormatter
+    private let diagnostics: @Sendable (_ line: String) -> Void
     private let shell: ShellAtPath
+    private let dryRunShell: ShellAtPath
 
     /// `date`/`dateFormatter` resolve the schedule window and parse snapshot timestamps; `calendar`
-    /// does the period math; `shell` runs the commands (inject a mock to test).
+    /// does the period math; `diagnostics` takes the pool-guard warning and the aggressive-prune
+    /// narration (a CLI's stderr); `shell` runs the commands and `dryRunShell` reports the ones a
+    /// dry run holds back (inject mocks to test).
     public init(
         calendar: Calendar,
         config: Config,
         date: @escaping @Sendable () -> Date,
         dateFormatter: DateFormatter,
-        shell: ShellAtPath
+        diagnostics: @escaping @Sendable (_ line: String) -> Void,
+        shell: ShellAtPath,
+        dryRunShell: ShellAtPath
     ) {
         self.calendar = calendar
         self.config = config
         self.date = date
         self.dateFormatter = dateFormatter
+        self.diagnostics = diagnostics
         self.shell = shell
+        self.dryRunShell = dryRunShell
     }
 
     /// Apply the retention schedule (`zfs destroy` for snapshots outside the windows), then, if a
     /// pool threshold is set and still exceeded, aggressively prune oldest-first. Listings and the
-    /// pool read run on a dry run too; only the destroys are held back.
+    /// pool read run on a dry run too; only the destroys are held back (reported, not run).
     public func consolidate() async throws {
         let runner = ZFSRunner(
             shell: shell,
+            dryRunShell: dryRunShell,
             execute: config.execute,
             stringEncoding: config.stringEncoding,
             lineSeparator: config.lineSeparator
@@ -147,7 +156,7 @@ public struct Consolidator: Sendable {
                 let verdict = config.execute
                     ? "Running aggressive pruning."
                     : "dry-run — would prune oldest-first until within threshold; the candidates follow in order."
-                print("zfs-tools consolidate: WARNING — pool \(pool) utilization exceeds threshold after consolidation (capacity: \(utilization.capacityPercent)%, available: \(utilization.availableBytes) bytes). \(verdict)")
+                diagnostics("zfs-tools consolidate: WARNING — pool \(pool) utilization exceeds threshold after consolidation (capacity: \(utilization.capacityPercent)%, available: \(utilization.availableBytes) bytes). \(verdict)")
                 try await aggressivePrune(
                     pool: pool,
                     utilization: utilization,
@@ -199,11 +208,11 @@ public struct Consolidator: Sendable {
                 maxCapacityPercent: config.maxPoolUtilizationPercent,
                 minFreeBytes: config.minFreeBytes
             ) else {
-                print("zfs-tools consolidate: pool \(pool) utilization now within threshold (capacity: \(utilization.capacityPercent)%). Aggressive pruning complete.")
+                diagnostics("zfs-tools consolidate: pool \(pool) utilization now within threshold (capacity: \(utilization.capacityPercent)%). Aggressive pruning complete.")
                 return
             }
             let verb = config.execute ? "destroying" : "dry-run — would destroy"
-            print("zfs-tools consolidate: aggressive prune — \(verb) \(snapshotAndDate.snapshot) (capacity: \(utilization.capacityPercent)%)")
+            diagnostics("zfs-tools consolidate: aggressive prune — \(verb) \(snapshotAndDate.snapshot) (capacity: \(utilization.capacityPercent)%)")
             _ = try await runner.run(ZFS.destroy(subject: snapshotAndDate.snapshot))
         }
     }
@@ -320,8 +329,8 @@ extension Consolidator {
             dateSeparator: String,
             execute: Bool,
             lineSeparator: String,
-            maxPoolUtilizationPercent: Float? = nil,
-            minFreeBytes: Int64? = nil,
+            maxPoolUtilizationPercent: Float?,
+            minFreeBytes: Int64?,
             schedule: SnapshotConsolidationSchedule,
             snapshotsNotConsolidated: [String],
             stringEncoding: String.Encoding

@@ -32,32 +32,32 @@ final class SnapshotterConfigTest: XCTestCase {
     }
 
     func testConfigFromFile() throws {
-        let config: Snapshotter.Config = try decodeResourceJSON(named: "SnapshotterConfig", fileManager: .default, jsonDecoder: JSONDecoder())
+        let config: Snapshotter.Config = try decodeResourceJSON(named: "SnapshotterConfig", jsonDecoder: JSONDecoder())
         XCTAssertEqual(Self.defaultConfig, config)
     }
 }
 
 extension SnapshotterConfigTest {
     static let defaultDataset = "nas_12tb/nas"
-    static let defaultConfig = snapshotConfig(datasetGrep: defaultDataset)
+    static let defaultConfig = snapshotConfig(recursive: true, excludedDatasetGreps: [], execute: false)
 
+    /// A snapshot config for `defaultDataset` with the tool's standard separators and encoding and
+    /// no pool guard, none of which a test using it varies. The test states the rest.
     static func snapshotConfig(
-        datasetGrep: String = defaultDataset,
-        recursive: Bool = true,
-        dateSeparator: String = Defaults.dateSeparator,
-        excludedDatasetGreps: [String] = [],
-        lineSeparator: String = Defaults.lineSeparator,
-        execute: Bool = Defaults.execute,
-        stringEncodingRawValue: String.Encoding.RawValue = Defaults.stringEncoding.rawValue
+        recursive: Bool,
+        excludedDatasetGreps: [String],
+        execute: Bool
     ) -> Snapshotter.Config {
         .init(
-            datasetGrep: datasetGrep,
-            dateSeparator: dateSeparator,
+            datasetGrep: defaultDataset,
+            dateSeparator: Defaults.dateSeparator,
             execute: execute,
             excludedDatasetGreps: excludedDatasetGreps,
-            lineSeparator: lineSeparator,
+            lineSeparator: Defaults.lineSeparator,
+            maxPoolUtilizationPercent: nil,
+            minFreeBytes: nil,
             recursive: recursive,
-            stringEncodingRawValue: stringEncodingRawValue
+            stringEncodingRawValue: Defaults.stringEncoding.rawValue
         )
     }
 

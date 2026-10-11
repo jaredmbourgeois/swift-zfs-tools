@@ -19,12 +19,55 @@ final class ZFSCommandTest: XCTestCase {
 
     func testShellLogFormatterLabelsCommandResultStdoutAndStderrSeparately() {
         let formatter = ShellLogFormatter(toolName: "zfs-tools", lineSeparator: "\n", stringEncoding: .utf8)
-        let result = ShellResult<ShellAtPathError>.success(stderr: "warning\n", stdout: "dataset\n")!
+        let result = ShellResult<ShellAtPathError>.success(stderr: "warning\n", stdout: "dataset\n", stringEncoding: .utf8)!
 
         XCTAssertEqual("zfs-tools command: zfs list -o name -H", formatter.command("zfs list -o name -H"))
         XCTAssertEqual("zfs-tools result: success (0)", formatter.result(result))
         XCTAssertEqual("zfs-tools stdout:\ndataset\n", formatter.stdout(result.processOutput.stdout))
         XCTAssertEqual("zfs-tools stderr:\nwarning\n", formatter.stderr(result.processOutput.stderr))
+    }
+
+    /// What a dry run prints for a command it holds back: the observer a composition root attaches
+    /// to the dry-run shell writes the command, a success, and the command again as stdout — the
+    /// same three entries, in the same order, that a real run writes for a command that printed.
+    func testResultObserverWritesTheLogOfACommandADryRunHeld() async {
+        let entries = Locked<[String]>([])
+        let formatter = ShellLogFormatter(toolName: "zfs-tools", lineSeparator: "\n", stringEncoding: .utf8)
+        let dryRunShell = ShellAtPath.dryRun(
+            shellObserver: formatter.resultObserver(write: { entry in entries.withLock { $0.append(entry) } }),
+            stringEncoding: .utf8
+        )
+        _ = await dryRunShell.execute(
+            executable: "zfs",
+            arguments: ["destroy", "tank/my data@s1"],
+            statusesForResult: .exitZeroSucceedsSIGTERMCancels(),
+            stream: nil,
+            timeout: nil
+        )
+        XCTAssertEqual(
+            [
+                "zfs-tools command: zfs destroy 'tank/my data@s1'",
+                "zfs-tools result: success (0)",
+                "zfs-tools stdout:\nzfs destroy 'tank/my data@s1'\n",
+            ],
+            entries.value
+        )
+    }
+
+    // MARK: - what a composition root reads from its process
+
+    func testWorkingDirectoryMustBeAbsolute() throws {
+        XCTAssertEqual("/var/lib/zfs-tools", try validatedWorkingDirectory("/var/lib/zfs-tools"))
+        // A deleted current directory reads as the empty path; a relative one is nobody's choice.
+        for unusable in ["", "relative/path", "."] {
+            XCTAssertThrowsError(try validatedWorkingDirectory(unusable), unusable) { error in
+                guard case ErrorType.invalidArgument(let name, let value, _, _) = error else {
+                    return XCTFail("expected invalidArgument, got \(error)")
+                }
+                XCTAssertEqual("working directory", name)
+                XCTAssertEqual(unusable, value)
+            }
+        }
     }
 
     // MARK: - effect: the dry-run decision's one input
@@ -46,7 +89,7 @@ final class ZFSCommandTest: XCTestCase {
         for command in [
             ZFS.destroy(subject: "tank/data@s1"),
             ZFS.bookmark(snapshot: "tank/data@s1", bookmark: "tank/data#sent"),
-            ZFS.snapshot(dataset: "tank/data", date: testDate, dateFormatter: dateFormatter, dateSeparator: "@"),
+            ZFS.snapshot(dataset: "tank/data", date: testDate, dateFormatter: dateFormatter, dateSeparator: "@", recursive: false),
             ZFS.receive(target: "tank/data"),
         ] {
             XCTAssertEqual(.mutating, command.effect, command.commandLine)
@@ -81,7 +124,7 @@ final class ZFSCommandTest: XCTestCase {
     }
 
     func testSnapshotName() {
-        let command = ZFS.snapshot(dataset: "tank/data", date: testDate, dateFormatter: dateFormatter, dateSeparator: "@")
+        let command = ZFS.snapshot(dataset: "tank/data", date: testDate, dateFormatter: dateFormatter, dateSeparator: "@", recursive: false)
         XCTAssertEqual("zfs snapshot tank/data@20220806-000000", command.commandLine)
     }
 
@@ -91,7 +134,7 @@ final class ZFSCommandTest: XCTestCase {
     }
 
     func testSnapshotSpacedNameIsOneArgument() {
-        let command = ZFS.snapshot(dataset: "tank/my data", date: testDate, dateFormatter: dateFormatter, dateSeparator: "@")
+        let command = ZFS.snapshot(dataset: "tank/my data", date: testDate, dateFormatter: dateFormatter, dateSeparator: "@", recursive: false)
         XCTAssertEqual(.argv(executable: "zfs", arguments: ["snapshot", "tank/my data@20220806-000000"]), command.form)
         XCTAssertEqual("zfs snapshot 'tank/my data@20220806-000000'", command.commandLine)
     }
@@ -126,20 +169,20 @@ final class ZFSCommandTest: XCTestCase {
 
     func testRunnerRunsReadOnlyCommandsOnADryRunAndHoldsMutations() async throws {
         let recorder = RecordingShell { command in
-            command == "zfs list -o name -H" ? .success(stdout: "tank/data")! : nil
+            command == "zfs list -o name -H" ? .successWithUTF8Stdout("tank/data") : nil
         }
-        let runner = ZFSRunner(shell: recorder.shell, execute: false, stringEncoding: .utf8, lineSeparator: "\n")
+        let runner = ZFSRunner(shell: recorder.shell, dryRunShell: recorder.dryRunShell, execute: false, stringEncoding: .utf8, lineSeparator: "\n")
         let listed = try await runner.lines(ZFS.listDatasets())
         XCTAssertEqual(["tank/data"], listed)
         let destroyed = try await runner.run(ZFS.destroy(subject: "tank/data@s1"))
-        XCTAssertEqual("zfs destroy tank/data@s1\n", try destroyed.decodeString().stdoutTyped)
+        XCTAssertEqual("zfs destroy tank/data@s1\n", try destroyed.decodeString(encoding: .utf8).stdoutTyped)
         XCTAssertEqual(["zfs list -o name -H"], recorder.executed)
         XCTAssertEqual(["zfs destroy tank/data@s1"], recorder.dryRuns)
     }
 
     func testRunnerExecutesMutationsWhenExecuting() async throws {
         let recorder = RecordingShell { _ in nil }
-        let runner = ZFSRunner(shell: recorder.shell, execute: true, stringEncoding: .utf8, lineSeparator: "\n")
+        let runner = ZFSRunner(shell: recorder.shell, dryRunShell: recorder.dryRunShell, execute: true, stringEncoding: .utf8, lineSeparator: "\n")
         _ = try await runner.run(ZFS.destroy(subject: "tank/data@s1"))
         XCTAssertEqual(["zfs destroy tank/data@s1"], recorder.executed)
         XCTAssertEqual([], recorder.dryRuns)

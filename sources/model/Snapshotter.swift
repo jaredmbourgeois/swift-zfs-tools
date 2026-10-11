@@ -10,25 +10,32 @@ import Shell
 
 /// Creates timestamped ZFS snapshots for every dataset matching `config.datasetGrep`, one task per
 /// dataset in parallel. Optionally guarded by a pool-utilization threshold. Honors dry-run via
-/// `config.execute`.
+/// `config.execute`: the listings and the pool read always run, the snapshots only when executing.
 public struct Snapshotter: Sendable {
     private let config: Config
     private let dateFormatter: DateFormatter
     private let date: @Sendable () -> Date
+    private let diagnostics: @Sendable (_ line: String) -> Void
     private let shell: ShellAtPath
+    private let dryRunShell: ShellAtPath
 
-    /// `date`/`dateFormatter` build each snapshot's timestamp suffix; `shell` runs the commands
-    /// (inject a mock to test).
+    /// `date`/`dateFormatter` build each snapshot's timestamp suffix; `diagnostics` takes the
+    /// pool-guard warning (a CLI's stderr); `shell` runs the commands and `dryRunShell` reports the
+    /// ones a dry run holds back (inject mocks to test).
     public init(
         config: Config,
         date: @Sendable @escaping () -> Date,
         dateFormatter: DateFormatter,
-        shell: ShellAtPath
+        diagnostics: @escaping @Sendable (_ line: String) -> Void,
+        shell: ShellAtPath,
+        dryRunShell: ShellAtPath
     ) {
         self.config = config
         self.date = date
         self.dateFormatter = dateFormatter
+        self.diagnostics = diagnostics
         self.shell = shell
+        self.dryRunShell = dryRunShell
     }
 
     /// Snapshot every matching dataset (`zfs snapshot [-r] dataset@<timestamp>`). If a pool
@@ -38,6 +45,7 @@ public struct Snapshotter: Sendable {
     public func snapshot() async throws {
         let runner = ZFSRunner(
             shell: shell,
+            dryRunShell: dryRunShell,
             execute: config.execute,
             stringEncoding: .init(rawValue: config.stringEncodingRawValue),
             lineSeparator: config.lineSeparator
@@ -50,7 +58,7 @@ public struct Snapshotter: Sendable {
                 minFreeBytes: config.minFreeBytes
             ) {
                 let verdict = config.execute ? "Skipping snapshot creation." : "dry-run — would skip snapshot creation."
-                print("zfs-tools snapshot: WARNING — pool \(pool) utilization exceeds threshold (capacity: \(utilization.capacityPercent)%, available: \(utilization.availableBytes) bytes). \(verdict)")
+                diagnostics("zfs-tools snapshot: WARNING — pool \(pool) utilization exceeds threshold (capacity: \(utilization.capacityPercent)%, available: \(utilization.availableBytes) bytes). \(verdict)")
                 return
             }
         }
@@ -121,10 +129,10 @@ extension Snapshotter {
             datasetGrep: String?,
             dateSeparator: String,
             execute: Bool,
-            excludedDatasetGreps: [String] = [],
+            excludedDatasetGreps: [String],
             lineSeparator: String,
-            maxPoolUtilizationPercent: Float? = nil,
-            minFreeBytes: Int64? = nil,
+            maxPoolUtilizationPercent: Float?,
+            minFreeBytes: Int64?,
             recursive: Bool,
             stringEncodingRawValue: String.Encoding.RawValue
         ) {

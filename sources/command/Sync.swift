@@ -15,11 +15,13 @@ struct Sync: AsyncParsableCommand {
     var arguments: Arguments.Sync
 
     func run() async throws {
-        let dateFormatter = makeDateFormatter(arguments.common.dateFormat ?? Defaults.dateFormat)
+        let root = try CommandRoot.readingThisProcess()
+        let shells = root.shells(arguments.common)
         let syncer = Syncer(
             config: .init(arguments: arguments),
-            dateFormatter: dateFormatter,
-            shell: Shell(arguments: arguments.common)
+            dateFormatter: root.dateFormatter(arguments.common),
+            shell: shells.shell,
+            dryRunShell: shells.dryRunShell
         )
         try await syncer.sync()
     }
@@ -30,10 +32,11 @@ struct SyncConfigure: ParsableCommand {
     var arguments: Arguments.SyncConfigure
 
     func run() throws {
+        let root = try CommandRoot.readingThisProcess()
         try encode(
-        Syncer.Config(arguments: arguments.sync),
+            Syncer.Config(arguments: arguments.sync),
             toJSONAtPath: arguments.outputPath,
-            fileSystem: .live,
+            fileSystem: root.fileSystem,
             jsonEncoder: .init()
         )
     }
@@ -44,16 +47,18 @@ struct SyncConfigured: AsyncParsableCommand {
     var arguments: Arguments.SyncConfigured
 
     func run() async throws {
+        let root = try CommandRoot.readingThisProcess()
         let config: Syncer.Config = try decodeFromJSONAtPath(
             arguments.configPath,
-            fileSystem: .live,
+            fileSystem: root.fileSystem,
             jsonDecoder: .init()
         )
-        let dateFormatter = makeDateFormatter(arguments.common.dateFormat ?? Defaults.dateFormat)
+        let shells = root.shells(arguments.common)
         let syncer = Syncer(
             config: config,
-            dateFormatter: dateFormatter,
-            shell: Shell(arguments: arguments.common)
+            dateFormatter: root.dateFormatter(arguments.common),
+            shell: shells.shell,
+            dryRunShell: shells.dryRunShell
         )
         try await syncer.sync()
     }

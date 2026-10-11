@@ -23,8 +23,9 @@ final class ActionTest: XCTestCase {
     XCTAssertEqual(Self.actions, actions)
   }
 
+  /// The same actions, read from `tests/resource/Actions.json`.
   func testFromJSON() throws {
-      let actions: [Action] = try decodeResourceJSON(named: "Actions", fileManager: .default, jsonDecoder: JSONDecoder())
+    let actions: [Action] = try decodeResourceJSON(named: "Actions", jsonDecoder: JSONDecoder())
     XCTAssertEqual(Self.actions, actions)
   }
 }

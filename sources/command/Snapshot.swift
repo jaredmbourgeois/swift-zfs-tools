@@ -15,12 +15,15 @@ struct Snapshot: AsyncParsableCommand {
     var arguments: Arguments.Snapshot
 
     func run() async throws {
-        let dateFormatter = makeDateFormatter(arguments.common.dateFormat ?? Defaults.dateFormat)
+        let root = try CommandRoot.readingThisProcess()
+        let shells = root.shells(arguments.common)
         let snapshotter = Snapshotter(
             config: .init(arguments: arguments),
-            date: { .now },
-            dateFormatter: dateFormatter,
-            shell: Shell(arguments: arguments.common)
+            date: root.date,
+            dateFormatter: root.dateFormatter(arguments.common),
+            diagnostics: root.diagnostics,
+            shell: shells.shell,
+            dryRunShell: shells.dryRunShell
         )
         try await snapshotter.snapshot()
     }
@@ -31,10 +34,11 @@ struct SnapshotConfigure: ParsableCommand {
     var arguments: Arguments.SnapshotConfigure
 
     func run() throws {
+        let root = try CommandRoot.readingThisProcess()
         try encode(
             Snapshotter.Config(arguments: arguments.snapshot),
             toJSONAtPath: arguments.outputPath,
-            fileSystem: .live,
+            fileSystem: root.fileSystem,
             jsonEncoder: .init()
         )
     }
@@ -45,17 +49,20 @@ struct SnapshotConfigured: AsyncParsableCommand {
     var arguments: Arguments.SnapshotConfigured
 
     func run() async throws {
+        let root = try CommandRoot.readingThisProcess()
         let config: Snapshotter.Config = try decodeFromJSONAtPath(
             arguments.configPath,
-            fileSystem: .live,
+            fileSystem: root.fileSystem,
             jsonDecoder: .init()
         )
-        let dateFormatter = makeDateFormatter(arguments.common.dateFormat ?? Defaults.dateFormat)
+        let shells = root.shells(arguments.common)
         let snapshotter = Snapshotter(
             config: config,
-            date: { .now },
-            dateFormatter: dateFormatter,
-            shell: Shell(arguments: arguments.common)
+            date: root.date,
+            dateFormatter: root.dateFormatter(arguments.common),
+            diagnostics: root.diagnostics,
+            shell: shells.shell,
+            dryRunShell: shells.dryRunShell
         )
         try await snapshotter.snapshot()
     }

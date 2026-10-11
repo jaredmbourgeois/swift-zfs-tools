@@ -18,47 +18,43 @@ import XCTest
 final class SyncerGuardCompatTest: XCTestCase {
     private let policy = ReceiveGuardPolicy(pool: "nas_12tb")
 
-    /// The ssh argument from a rendered `ssh … '<remote command>'` line — exactly what sshd hands the
-    /// forced command as `SSH_ORIGINAL_COMMAND`.
-    private func remoteCommand(in line: String) -> String? {
-        // A send pipeline ends in the ssh stage; a bare ssh line is the stage itself.
-        let sshStage = line.components(separatedBy: " | ssh ").last.map { line.contains(" | ssh ") ? "ssh " + $0 : $0 } ?? line
-        guard sshStage.hasPrefix("ssh ") else { return nil }
-        return ReceiveGuardPolicy.tokenize(sshStage)?.last
-    }
-
     func testEveryRemoteCommandOfASyncIsAcceptedByTheGuard() async throws {
         let config = SyncerConfigTest.syncConfig(
+            datasetGrep: SyncerConfigTest.datasetGrep,
             execute: true,
+            sshKeyPath: SyncerConfigTest.sshKeyPath,
             sendRateLimit: "20M",
-            sentBookmarkName: "sent-serverMTB"
+            pruneRemoteSnapshots: true,
+            sentBookmarkName: "sent-serverMTB",
+            remotePathStrip: nil,
+            remotePathRoot: nil
         )
         let recorder = RecordingShell { command in
             switch command {
             case "zfs list -o name -H":
-                return .success(stdout: "nas_12tb/nas/documents\nnas_12tb/nas/my data")!
+                return .successWithUTF8Stdout("nas_12tb/nas/documents\nnas_12tb/nas/my data")
             case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg":
-                return .success(stdout: snapshotRecordOutput([
+                return .successWithUTF8Stdout(snapshotRecordOutput([
                     "nas_12tb/nas/documents@20220801-000000",
                     "nas_12tb/nas/documents@20220805-000000",
                     "nas_12tb/nas/documents@20220806-000000",
                     "nas_12tb/nas/my data@20220806-000000",
-                ]))!
+                ]))
             case "ssh -p sshPort -i sshKeyPath sshUser@sshIP 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg'":
                 // The destination holds one stale snapshot (pruned) and the common base.
-                return .success(stdout: snapshotRecordOutput([
+                return .successWithUTF8Stdout(snapshotRecordOutput([
                     "nas_12tb/nas/documents@20220730-000000",
                     "nas_12tb/nas/documents@20220801-000000",
-                ]))!
+                ]))
             case "zfs list -t bookmark -H -p -o guid,createtxg,name -s createtxg":
-                return .success(stdout: "")!
+                return .successWithUTF8Stdout("")
             default:
                 return nil
             }
         }
-        try await Syncer(config: config, dateFormatter: dateFormatter, shell: recorder.shell).sync()
+        try await Syncer(config: config, dateFormatter: dateFormatter, shell: recorder.shell, dryRunShell: recorder.dryRunShell).sync()
 
-        let remoteCommands = recorder.all.map(\.command).compactMap(remoteCommand(in:))
+        let remoteCommands = recorder.all.map(\.command).compactMap(remoteCommand(inLocalCommandLine:))
         // Enumerate, snapshot-destroy, a two-snapshot `-I` receive into the dataset, a full receive
         // of a spaced name: the four shapes a receiver sees.
         XCTAssertEqual(
@@ -95,9 +91,11 @@ final class SyncerGuardCompatTest: XCTestCase {
         )
     }
 
-    /// A 2.1.0 sender quoted every argument; a 2.2.0 receiver still accepts that sender during a
-    /// lockstep upgrade, and a 2.2.0 sender's bare arguments are accepted by a 2.1.0 guard (the same
-    /// tokenizer) — the two shapes are one argv.
+    /// A quoted token and a bare one are the same argv to the guard, which is why a sender may quote
+    /// only the tokens that need it. On the wire the guard has received bare words from every
+    /// version: a 2.1.0 sender quoted each argument, but for its own local shell, which stripped the
+    /// quotes before `ssh` ran; since 2.2.0 the remote line is one ssh argument, and a quote reaches
+    /// the guard only around a name that needs one (`remote_shapes/` records each version's lines).
     func testQuotedAndBareShapesAreTheSameArgv() throws {
         XCTAssertEqual(
             try policy.validate("zfs destroy 'nas_12tb/nas/documents@20220806-000000'").get(),

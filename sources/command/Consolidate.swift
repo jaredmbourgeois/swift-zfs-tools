@@ -15,20 +15,22 @@ struct Consolidate: AsyncParsableCommand {
     var arguments: Arguments.Consolidate
 
     func run() async throws {
-        let calendar = makeCalendar()
-        let dateFormatter = makeDateFormatter(arguments.common.dateFormat ?? Defaults.dateFormat)
-        let date: @Sendable () -> Date = { .now }
+        let root = try CommandRoot.readingThisProcess()
+        let dateFormatter = root.dateFormatter(arguments.common)
+        let shells = root.shells(arguments.common)
         let consolidator = Consolidator(
-            calendar: calendar,
+            calendar: root.calendar(),
             config: try Consolidator.Config(
                 arguments: arguments,
                 dateFormatter: dateFormatter,
-                fileSystem: .live,
+                fileSystem: root.fileSystem,
                 jsonDecoder: .init()
             ),
-            date: date,
+            date: root.date,
             dateFormatter: dateFormatter,
-            shell: Shell(arguments: arguments.common)
+            diagnostics: root.diagnostics,
+            shell: shells.shell,
+            dryRunShell: shells.dryRunShell
         )
         try await consolidator.consolidate()
     }
@@ -39,16 +41,16 @@ struct ConsolidateConfigure: ParsableCommand {
     var arguments: Arguments.ConsolidateConfigure
 
     func run() throws {
-        let dateFormatter = makeDateFormatter(arguments.consolidate.common.dateFormat ?? Defaults.dateFormat)
+        let root = try CommandRoot.readingThisProcess()
         try encode(
             try Consolidator.Config(
                 arguments: arguments.consolidate,
-                dateFormatter: dateFormatter,
-                fileSystem: .live,
+                dateFormatter: root.dateFormatter(arguments.consolidate.common),
+                fileSystem: root.fileSystem,
                 jsonDecoder: .init()
             ),
             toJSONAtPath: arguments.outputPath,
-            fileSystem: .live,
+            fileSystem: root.fileSystem,
             jsonEncoder: .init()
         )
     }
@@ -59,21 +61,21 @@ struct ConsolidateConfigured: AsyncParsableCommand {
     var arguments: Arguments.ConsolidateConfigured
 
     func run() async throws {
-        let jsonDecoder = JSONDecoder()
+        let root = try CommandRoot.readingThisProcess()
         let config: Consolidator.Config = try decodeFromJSONAtPath(
             arguments.configPath,
-            fileSystem: .live,
-            jsonDecoder: jsonDecoder
+            fileSystem: root.fileSystem,
+            jsonDecoder: .init()
         )
-        let calendar = makeCalendar()
-        let dateFormatter = makeDateFormatter(arguments.common.dateFormat ?? Defaults.dateFormat)
-        let date: @Sendable () -> Date = { .now }
+        let shells = root.shells(arguments.common)
         let consolidator = Consolidator(
-            calendar: calendar,
+            calendar: root.calendar(),
             config: config,
-            date: date,
-            dateFormatter: dateFormatter,
-            shell: Shell(arguments: arguments.common)
+            date: root.date,
+            dateFormatter: root.dateFormatter(arguments.common),
+            diagnostics: root.diagnostics,
+            shell: shells.shell,
+            dryRunShell: shells.dryRunShell
         )
         try await consolidator.consolidate()
     }

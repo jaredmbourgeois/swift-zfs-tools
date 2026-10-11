@@ -80,11 +80,11 @@ struct Command: AsyncParsableCommand {
 
               For automation, create config files and add execute-actions to cron:
 
-              # Sample actions file (~/zfs/backup.json)
+              # Sample actions file (~/zfs/backup.json); configPath is read as written, so it must be absolute
               [
-                {"snapshot": {"configPath": "~/zfs/snapshot.json"}},
-                {"consolidate": {"configPath": "~/zfs/consolidate.json"}},
-                {"sync": {"configPath": "~/zfs/sync.json"}}
+                {"snapshot": {"configPath": "/home/user/zfs/snapshot.json"}},
+                {"consolidate": {"configPath": "/home/user/zfs/consolidate.json"}},
+                {"sync": {"configPath": "/home/user/zfs/sync.json"}}
               ]
 
               # Add to crontab for nightly backups

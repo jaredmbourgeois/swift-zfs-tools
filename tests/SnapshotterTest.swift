@@ -11,17 +11,17 @@ import XCTest
 
 @testable import ZFSToolsModel
 
+// Every config here executes and sets no pool threshold, so the dry-run shell and the diagnostics
+// sink are doubles that fail the test if anything reaches them.
 final class SnapshotterTest: XCTestCase {
-    private let calendar = makeCalendar()
-
-    private lazy var dateFormatter = makeDateFormatter(Defaults.dateFormat)
+    private lazy var dateFormatter = makeDateFormatter(Defaults.dateFormat, timeZone: testTimeZone)
 
     private let snapshotDate = testDate
 
     private let timeout = TimeInterval(1)
 
     func testSnapshotsAreTaken() async throws {
-        let config = SnapshotterConfigTest.snapshotConfig(recursive: true, execute: true)
+        let config = SnapshotterConfigTest.snapshotConfig(recursive: true, excludedDatasetGreps: [], execute: true)
         let datasets = [
             "nas_12tb/nas",
             "nas_12tb/nas/documents",
@@ -32,31 +32,30 @@ final class SnapshotterTest: XCTestCase {
         let shell = ShellAtPath {
             @Sendable (
                 _ command: ShellCommand,
-                _ dryRun: Bool,
-                _ estimatedOutputSize: Int?,
-                _ estimatedErrorSize: Int?,
                 _ statusesForResult: ShellTermination.StatusesForResult,
                 _ stream: ShellStream?,
                 _ timeout: TimeInterval?
             ) async -> ShellResult in
             switch command {
             case "zfs list -o name -H":
-                return .success(
-                    stdout: datasets.joined(separator: Defaults.lineSeparator)
-                )!
+                return .successWithUTF8Stdout(
+                    datasets.joined(separator: Defaults.lineSeparator)
+                )
             case snapshotNasCommand:
                 expectSnapshotNas.fulfill()
-                return .success()
+                return .emptySuccess()
             default:
                 XCTFail("unexpected command: \(command)")
-                return .success()
+                return .emptySuccess()
             }
         }
         let snapshotter = Snapshotter(
             config: config,
             date: { [snapshotDate] in snapshotDate },
             dateFormatter: dateFormatter,
-            shell: shell
+            diagnostics: unexpectedDiagnostics,
+            shell: shell,
+            dryRunShell: .unusedDryRunShell()
         )
         try await snapshotter.snapshot()
         await fulfillment(
@@ -80,29 +79,28 @@ final class SnapshotterTest: XCTestCase {
         let shell = ShellAtPath {
             @Sendable (
                 _ command: ShellCommand,
-                _ dryRun: Bool,
-                _ estimatedOutputSize: Int?,
-                _ estimatedErrorSize: Int?,
                 _ statusesForResult: ShellTermination.StatusesForResult,
                 _ stream: ShellStream?,
                 _ timeout: TimeInterval?
             ) async -> ShellResult in
             switch command {
             case "zfs list -o name -H":
-                return .success(stdout: [includedDataset, excludedDataset].joined(separator: Defaults.lineSeparator))!
+                return .successWithUTF8Stdout([includedDataset, excludedDataset].joined(separator: Defaults.lineSeparator))
             case snapshotIncludedCommand:
                 expectSnapshotIncluded.fulfill()
-                return .success()
+                return .emptySuccess()
             default:
                 XCTFail("unexpected command: \(command)")
-                return .success()
+                return .emptySuccess()
             }
         }
         let snapshotter = Snapshotter(
             config: config,
             date: { [snapshotDate] in snapshotDate },
             dateFormatter: dateFormatter,
-            shell: shell
+            diagnostics: unexpectedDiagnostics,
+            shell: shell,
+            dryRunShell: .unusedDryRunShell()
         )
         try await snapshotter.snapshot()
         await fulfillment(of: [expectSnapshotIncluded], timeout: timeout)
@@ -124,36 +122,35 @@ final class SnapshotterTest: XCTestCase {
         let shell = ShellAtPath {
             @Sendable (
                 _ command: ShellCommand,
-                _ dryRun: Bool,
-                _ estimatedOutputSize: Int?,
-                _ estimatedErrorSize: Int?,
                 _ statusesForResult: ShellTermination.StatusesForResult,
                 _ stream: ShellStream?,
                 _ timeout: TimeInterval?
             ) async -> ShellResult in
             switch command {
             case "zfs list -o name -H":
-                return .success(stdout: [includedParent, includedChild, excludedChild].joined(separator: Defaults.lineSeparator))!
+                return .successWithUTF8Stdout([includedParent, includedChild, excludedChild].joined(separator: Defaults.lineSeparator))
             case snapshotParentCommand:
                 expectSnapshotParent.fulfill()
-                return .success()
+                return .emptySuccess()
             case snapshotChildCommand:
                 expectSnapshotChild.fulfill()
-                return .success()
+                return .emptySuccess()
             default:
                 if command.contains(" -r ") || command.contains(excludedChild) {
                     XCTFail("exclusions must not use recursive snapshotting or snapshot excluded child: \(command)")
                 } else {
                     XCTFail("unexpected command: \(command)")
                 }
-                return .success()
+                return .emptySuccess()
             }
         }
         let snapshotter = Snapshotter(
             config: config,
             date: { [snapshotDate] in snapshotDate },
             dateFormatter: dateFormatter,
-            shell: shell
+            diagnostics: unexpectedDiagnostics,
+            shell: shell,
+            dryRunShell: .unusedDryRunShell()
         )
         try await snapshotter.snapshot()
         await fulfillment(of: [expectSnapshotParent, expectSnapshotChild], timeout: timeout)

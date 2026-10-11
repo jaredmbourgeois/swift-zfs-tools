@@ -56,39 +56,36 @@ final class PoolUtilizationTest: XCTestCase {
         let shell = ShellAtPath {
             @Sendable (
                 _ command: ShellCommand,
-                _ dryRun: Bool,
-                _ estimatedOutputSize: Int?,
-                _ estimatedErrorSize: Int?,
                 _ statusesForResult: ShellTermination.StatusesForResult,
                 _ stream: ShellStream?,
                 _ timeout: TimeInterval?
             ) async -> ShellResult in
             if command.contains("zpool list") {
-                return .success(stdout: "42")!
+                return .successWithUTF8Stdout("42")
             } else if command.contains("zfs list") {
-                return .success(stdout: "1234567890\t9876543210")!
+                return .successWithUTF8Stdout("1234567890\t9876543210")
             }
             XCTFail("unexpected command: \(command)")
-            return .success()
+            return .emptySuccess()
         }
-        let utilization = try await PoolUtilization.query(pool: "tank", runner: runner(shell, execute: true))
+        let utilization = try await PoolUtilization.query(pool: "tank", runner: runner(shell, dryRunShell: .unusedDryRunShell(), execute: true))
         XCTAssertEqual(42, utilization.capacityPercent)
         XCTAssertEqual(1_234_567_890, utilization.usedBytes)
         XCTAssertEqual(9_876_543_210, utilization.availableBytes)
     }
 
-    private func runner(_ shell: ShellAtPath, execute: Bool) -> ZFSRunner {
-        ZFSRunner(shell: shell, execute: execute, stringEncoding: .utf8, lineSeparator: "\n")
+    private func runner(_ shell: ShellAtPath, dryRunShell: ShellAtPath, execute: Bool) -> ZFSRunner {
+        ZFSRunner(shell: shell, dryRunShell: dryRunShell, execute: execute, stringEncoding: .utf8, lineSeparator: "\n")
     }
 
     /// The pool reads are read-only, so a dry run runs them for real and the guard reads the real
-    /// numbers — the mock sees `dryRun == false` on both and nothing is echoed back.
+    /// numbers — both reach the shell that runs, and nothing reaches the dry-run shell.
     func testQueryReadsThePoolOnADryRun() async throws {
         let recorder = RecordingShell { command in
-            if command.hasPrefix("zpool list") { return .success(stdout: "42")! }
-            return .success(stdout: "1234567890\t9876543210")!
+            if command.hasPrefix("zpool list") { return .successWithUTF8Stdout("42") }
+            return .successWithUTF8Stdout("1234567890\t9876543210")
         }
-        let utilization = try await PoolUtilization.query(pool: "tank", runner: runner(recorder.shell, execute: false))
+        let utilization = try await PoolUtilization.query(pool: "tank", runner: runner(recorder.shell, dryRunShell: recorder.dryRunShell, execute: false))
         XCTAssertEqual(42, utilization.capacityPercent)
         XCTAssertEqual(
             ["zpool list -Hp -o capacity tank", "zfs list -Hp -o used,available tank"],
@@ -102,20 +99,17 @@ final class PoolUtilizationTest: XCTestCase {
         let shell = ShellAtPath {
             @Sendable (
                 _ command: ShellCommand,
-                _ dryRun: Bool,
-                _ estimatedOutputSize: Int?,
-                _ estimatedErrorSize: Int?,
                 _ statusesForResult: ShellTermination.StatusesForResult,
                 _ stream: ShellStream?,
                 _ timeout: TimeInterval?
             ) async -> ShellResult in
             if command.contains("zpool list") {
-                return .success(stdout: "not-a-number")!
+                return .successWithUTF8Stdout("not-a-number")
             }
-            return .success(stdout: "1234567890\t9876543210")!
+            return .successWithUTF8Stdout("1234567890\t9876543210")
         }
         do {
-            _ = try await PoolUtilization.query(pool: "tank", runner: runner(shell, execute: true))
+            _ = try await PoolUtilization.query(pool: "tank", runner: runner(shell, dryRunShell: .unusedDryRunShell(), execute: true))
             XCTFail("expected query to throw on unparseable capacity")
         } catch {
             // expected
@@ -126,20 +120,17 @@ final class PoolUtilizationTest: XCTestCase {
         let shell = ShellAtPath {
             @Sendable (
                 _ command: ShellCommand,
-                _ dryRun: Bool,
-                _ estimatedOutputSize: Int?,
-                _ estimatedErrorSize: Int?,
                 _ statusesForResult: ShellTermination.StatusesForResult,
                 _ stream: ShellStream?,
                 _ timeout: TimeInterval?
             ) async -> ShellResult in
             if command.contains("zpool list") {
-                return .success(stdout: "42")!
+                return .successWithUTF8Stdout("42")
             }
-            return .success(stdout: "garbage-without-tab")!
+            return .successWithUTF8Stdout("garbage-without-tab")
         }
         do {
-            _ = try await PoolUtilization.query(pool: "tank", runner: runner(shell, execute: true))
+            _ = try await PoolUtilization.query(pool: "tank", runner: runner(shell, dryRunShell: .unusedDryRunShell(), execute: true))
             XCTFail("expected query to throw on unparseable used/available")
         } catch {
             // expected
@@ -153,9 +144,9 @@ final class PoolUtilizationTest: XCTestCase {
         // the two pool reads and the listing RUN — and the snapshot is reported, not taken.
         let recorder = RecordingShell { command in
             switch command {
-            case "zpool list -Hp -o capacity tank": return .success(stdout: "50")!
-            case "zfs list -Hp -o used,available tank": return .success(stdout: "500000000000\t500000000000")!
-            case "zfs list -o name -H": return .success(stdout: "tank/data")!
+            case "zpool list -Hp -o capacity tank": return .successWithUTF8Stdout("50")
+            case "zfs list -Hp -o used,available tank": return .successWithUTF8Stdout("500000000000\t500000000000")
+            case "zfs list -o name -H": return .successWithUTF8Stdout("tank/data")
             default: return nil
             }
         }
@@ -163,8 +154,10 @@ final class PoolUtilizationTest: XCTestCase {
             datasetGrep: "tank/data",
             dateSeparator: Defaults.dateSeparator,
             execute: false,
+            excludedDatasetGreps: [],
             lineSeparator: Defaults.lineSeparator,
             maxPoolUtilizationPercent: 80,
+            minFreeBytes: nil,
             recursive: false,
             stringEncodingRawValue: Defaults.stringEncoding.rawValue
         )
@@ -172,7 +165,9 @@ final class PoolUtilizationTest: XCTestCase {
             config: config,
             date: { testDate },
             dateFormatter: dateFormatter,
-            shell: recorder.shell
+            diagnostics: unexpectedDiagnostics,
+            shell: recorder.shell,
+            dryRunShell: recorder.dryRunShell
         )
         try await snapshotter.snapshot()
         XCTAssertEqual(
@@ -185,8 +180,8 @@ final class PoolUtilizationTest: XCTestCase {
     func testSnapshotDryRunOverThresholdReportsTheSkipAndTakesNothing() async throws {
         let recorder = RecordingShell { command in
             switch command {
-            case "zpool list -Hp -o capacity tank": return .success(stdout: "90")!
-            case "zfs list -Hp -o used,available tank": return .success(stdout: "900000000000\t100000000000")!
+            case "zpool list -Hp -o capacity tank": return .successWithUTF8Stdout("90")
+            case "zfs list -Hp -o used,available tank": return .successWithUTF8Stdout("900000000000\t100000000000")
             default: return nil
             }
         }
@@ -194,15 +189,30 @@ final class PoolUtilizationTest: XCTestCase {
             datasetGrep: "tank/data",
             dateSeparator: Defaults.dateSeparator,
             execute: false,
+            excludedDatasetGreps: [],
             lineSeparator: Defaults.lineSeparator,
             maxPoolUtilizationPercent: 80,
+            minFreeBytes: nil,
             recursive: false,
             stringEncodingRawValue: Defaults.stringEncoding.rawValue
         )
-        try await Snapshotter(config: config, date: { testDate }, dateFormatter: dateFormatter, shell: recorder.shell).snapshot()
+        let diagnostics = Locked<[String]>([])
+        try await Snapshotter(
+            config: config,
+            date: { testDate },
+            dateFormatter: dateFormatter,
+            diagnostics: { line in diagnostics.withLock { $0.append(line) } },
+            shell: recorder.shell,
+            dryRunShell: recorder.dryRunShell
+        ).snapshot()
         // Over threshold the run stops at the guard: no listing, no snapshot, not even a dry-run one.
         XCTAssertEqual(["zfs list -Hp -o used,available tank", "zpool list -Hp -o capacity tank"], recorder.executed.sorted())
         XCTAssertEqual([], recorder.dryRuns)
+        // The one thing it says goes to the diagnostics sink (a CLI's stderr).
+        XCTAssertEqual(
+            ["zfs-tools snapshot: WARNING — pool tank utilization exceeds threshold (capacity: 90.0%, available: 100000000000 bytes). dry-run — would skip snapshot creation."],
+            diagnostics.value
+        )
     }
 
     // MARK: - Snapshot skips when over threshold
@@ -213,42 +223,48 @@ final class PoolUtilizationTest: XCTestCase {
         let shell = ShellAtPath {
             @Sendable (
                 _ command: ShellCommand,
-                _ dryRun: Bool,
-                _ estimatedOutputSize: Int?,
-                _ estimatedErrorSize: Int?,
                 _ statusesForResult: ShellTermination.StatusesForResult,
                 _ stream: ShellStream?,
                 _ timeout: TimeInterval?
             ) async -> ShellResult in
             if command.contains("zpool list") {
-                return .success(stdout: "90")!
+                return .successWithUTF8Stdout("90")
             } else if command.contains("zfs list -Hp -o used,available") {
-                return .success(stdout: "900000000000\t100000000000")!
+                return .successWithUTF8Stdout("900000000000\t100000000000")
             } else if command.contains("zfs list") {
-                return .success(stdout: "tank/data")!
+                return .successWithUTF8Stdout("tank/data")
             } else if command.contains("zfs snapshot") {
                 snapshotShouldNotBeCalled.fulfill()
-                return .success()
+                return .emptySuccess()
             }
-            return .success()
+            return .emptySuccess()
         }
         let config = Snapshotter.Config(
             datasetGrep: "tank/data",
             dateSeparator: Defaults.dateSeparator,
             execute: true,
+            excludedDatasetGreps: [],
             lineSeparator: Defaults.lineSeparator,
             maxPoolUtilizationPercent: 80,
+            minFreeBytes: nil,
             recursive: false,
             stringEncodingRawValue: Defaults.stringEncoding.rawValue
         )
+        let diagnostics = Locked<[String]>([])
         let snapshotter = Snapshotter(
             config: config,
             date: { testDate },
             dateFormatter: dateFormatter,
-            shell: shell
+            diagnostics: { line in diagnostics.withLock { $0.append(line) } },
+            shell: shell,
+            dryRunShell: .unusedDryRunShell()
         )
         try await snapshotter.snapshot()
         await fulfillment(of: [snapshotShouldNotBeCalled], timeout: 0.1)
+        XCTAssertEqual(
+            ["zfs-tools snapshot: WARNING — pool tank utilization exceeds threshold (capacity: 90.0%, available: 100000000000 bytes). Skipping snapshot creation."],
+            diagnostics.value
+        )
     }
 
     func testSnapshotProceedsWhenUnderThreshold() async throws {
@@ -256,32 +272,31 @@ final class PoolUtilizationTest: XCTestCase {
         let shell = ShellAtPath {
             @Sendable (
                 _ command: ShellCommand,
-                _ dryRun: Bool,
-                _ estimatedOutputSize: Int?,
-                _ estimatedErrorSize: Int?,
                 _ statusesForResult: ShellTermination.StatusesForResult,
                 _ stream: ShellStream?,
                 _ timeout: TimeInterval?
             ) async -> ShellResult in
             if command.contains("zpool list") {
-                return .success(stdout: "50")!
+                return .successWithUTF8Stdout("50")
             } else if command.contains("zfs list -Hp -o used,available") {
-                return .success(stdout: "500000000000\t500000000000")!
+                return .successWithUTF8Stdout("500000000000\t500000000000")
             } else if command.contains("zfs list") {
-                return .success(stdout: "tank/data")!
+                return .successWithUTF8Stdout("tank/data")
             } else if command.contains("zfs snapshot") {
                 expectSnapshot.fulfill()
-                return .success()
+                return .emptySuccess()
             }
             XCTFail("unexpected command: \(command)")
-            return .success()
+            return .emptySuccess()
         }
         let config = Snapshotter.Config(
             datasetGrep: "tank/data",
             dateSeparator: Defaults.dateSeparator,
             execute: true,
+            excludedDatasetGreps: [],
             lineSeparator: Defaults.lineSeparator,
             maxPoolUtilizationPercent: 80,
+            minFreeBytes: nil,
             recursive: false,
             stringEncodingRawValue: Defaults.stringEncoding.rawValue
         )
@@ -289,7 +304,9 @@ final class PoolUtilizationTest: XCTestCase {
             config: config,
             date: { testDate },
             dateFormatter: dateFormatter,
-            shell: shell
+            diagnostics: unexpectedDiagnostics,
+            shell: shell,
+            dryRunShell: .unusedDryRunShell()
         )
         try await snapshotter.snapshot()
         await fulfillment(of: [expectSnapshot], timeout: timeout)
@@ -338,6 +355,7 @@ final class PoolUtilizationTest: XCTestCase {
             datasetGrep: "tank",
             dateSeparator: "@",
             execute: false,
+            excludedDatasetGreps: [],
             lineSeparator: "\n",
             maxPoolUtilizationPercent: 80,
             minFreeBytes: 5_368_709_120,

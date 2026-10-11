@@ -96,40 +96,42 @@ final class SyncerSendStepsTest: XCTestCase {
     /// not five commands per snapshot as before.
     func testSyncFromABookmarkBaseSendsTwoStreamsAndAdvancesTheBookmarkOnce() async throws {
         let config = SyncerConfigTest.syncConfig(
+            datasetGrep: SyncerConfigTest.datasetGrep,
             execute: true,
+            sshKeyPath: SyncerConfigTest.sshKeyPath,
+            sendRateLimit: nil,
             pruneRemoteSnapshots: false,
-            sentBookmarkName: "sent-serverMTB"
+            sentBookmarkName: "sent-serverMTB",
+            remotePathStrip: nil,
+            remotePathRoot: nil
         )
         let ssh = "ssh -p sshPort -i sshKeyPath sshUser@sshIP"
         let commands = Locked<[String]>([])
         let shell = ShellAtPath { @Sendable (
             _ command: ShellCommand,
-            _ dryRun: Bool,
-            _ estimatedOutputSize: Int?,
-            _ estimatedErrorSize: Int?,
             _ statusesForResult: ShellTermination.StatusesForResult,
             _ stream: ShellStream?,
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
             case "zfs list -o name -H":
-                return .success(stdout: "nas_12tb/nas/documents")!
+                return .successWithUTF8Stdout("nas_12tb/nas/documents")
             case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg":
-                return .success(stdout: [
+                return .successWithUTF8Stdout([
                     snapshotRecord("guid-30", 30, "nas_12tb/nas/documents@20220807-000000"),
                     snapshotRecord("guid-40", 40, "nas_12tb/nas/documents@20220808-000000"),
                     snapshotRecord("guid-50", 50, "nas_12tb/nas/documents@20220809-000000"),
-                ].joined(separator: "\n"))!
+                ].joined(separator: "\n"))
             case "\(ssh) 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg'":
-                return .success(stdout: snapshotRecord("bookmark-guid", 20, "nas_12tb/nas/documents@20220805-000000"))!
+                return .successWithUTF8Stdout(snapshotRecord("bookmark-guid", 20, "nas_12tb/nas/documents@20220805-000000"))
             case "zfs list -t bookmark -H -p -o guid,createtxg,name -s createtxg":
-                return .success(stdout: snapshotRecord("bookmark-guid", 20, "nas_12tb/nas/documents#sent-serverMTB"))!
+                return .successWithUTF8Stdout(snapshotRecord("bookmark-guid", 20, "nas_12tb/nas/documents#sent-serverMTB"))
             default:
                 commands.withLock { $0.append(command) }
-                return .success()
+                return .emptySuccess()
             }
         }
-        try await Syncer(config: config, dateFormatter: dateFormatter, shell: shell).sync()
+        try await Syncer(config: config, dateFormatter: dateFormatter, shell: shell, dryRunShell: .unusedDryRunShell()).sync()
 
         XCTAssertEqual(
             commands.withLock { $0 },
@@ -148,48 +150,51 @@ final class SyncerSendStepsTest: XCTestCase {
     /// destination does not hold.
     func testAFailedStreamDoesNotAdvanceTheBookmark() async throws {
         let config = SyncerConfigTest.syncConfig(
+            datasetGrep: SyncerConfigTest.datasetGrep,
             execute: true,
+            sshKeyPath: SyncerConfigTest.sshKeyPath,
+            sendRateLimit: nil,
             pruneRemoteSnapshots: false,
-            sentBookmarkName: "sent-serverMTB"
+            sentBookmarkName: "sent-serverMTB",
+            remotePathStrip: nil,
+            remotePathRoot: nil
         )
         let ssh = "ssh -p sshPort -i sshKeyPath sshUser@sshIP"
         let bookmarkCommands = Locked<Int>(0)
         let shell = ShellAtPath { @Sendable (
             _ command: ShellCommand,
-            _ dryRun: Bool,
-            _ estimatedOutputSize: Int?,
-            _ estimatedErrorSize: Int?,
             _ statusesForResult: ShellTermination.StatusesForResult,
             _ stream: ShellStream?,
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
             case "zfs list -o name -H":
-                return .success(stdout: "nas_12tb/nas/documents")!
+                return .successWithUTF8Stdout("nas_12tb/nas/documents")
             case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg":
-                return .success(stdout: [
+                return .successWithUTF8Stdout([
                     snapshotRecord("guid-20", 20, "nas_12tb/nas/documents@20220805-000000"),
                     snapshotRecord("guid-30", 30, "nas_12tb/nas/documents@20220807-000000"),
                     snapshotRecord("guid-40", 40, "nas_12tb/nas/documents@20220808-000000"),
-                ].joined(separator: "\n"))!
+                ].joined(separator: "\n"))
             case "\(ssh) 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg'":
-                return .success(stdout: snapshotRecord("guid-20", 20, "nas_12tb/nas/documents@20220805-000000"))!
+                return .successWithUTF8Stdout(snapshotRecord("guid-20", 20, "nas_12tb/nas/documents@20220805-000000"))
             case "zfs list -t bookmark -H -p -o guid,createtxg,name -s createtxg":
-                return .success(stdout: "")!
+                return .successWithUTF8Stdout("")
             default:
                 if command.contains("zfs send") {
                     return ShellResult(
                         error: ShellAtPathError(kind: .termination(1), userInfo: [:]),
                         processOutput: .init(stderr: Data("cannot receive: connection lost".utf8), stdout: Data()),
-                        termination: .init(reason: .exit, status: 1)
+                        termination: .init(reason: .exit, status: 1),
+                        dryRun: false
                     )
                 }
                 bookmarkCommands.withLock { $0 += 1 }
-                return .success()
+                return .emptySuccess()
             }
         }
         do {
-            try await Syncer(config: config, dateFormatter: dateFormatter, shell: shell).sync()
+            try await Syncer(config: config, dateFormatter: dateFormatter, shell: shell, dryRunShell: .unusedDryRunShell()).sync()
             XCTFail("a failed stream must fail the sync")
         } catch {}
         XCTAssertEqual(bookmarkCommands.withLock { $0 }, 0)
@@ -198,34 +203,31 @@ final class SyncerSendStepsTest: XCTestCase {
     /// Datasets go in name order, so a parent is received before its children however the
     /// listing returned them.
     func testSyncSendsDatasetsInNameOrder() async throws {
-        let config = SyncerConfigTest.syncConfig(execute: true, pruneRemoteSnapshots: false)
+        let config = SyncerConfigTest.executingSync(pruneRemoteSnapshots: false)
         let sent = Locked<[String]>([])
         let shell = ShellAtPath { @Sendable (
             _ command: ShellCommand,
-            _ dryRun: Bool,
-            _ estimatedOutputSize: Int?,
-            _ estimatedErrorSize: Int?,
             _ statusesForResult: ShellTermination.StatusesForResult,
             _ stream: ShellStream?,
             _ timeout: TimeInterval?
         ) async -> ShellResult in
             switch command {
             case "zfs list -o name -H":
-                return .success(stdout: "nas_12tb/nas/media/photos\nnas_12tb/nas/media\nnas_12tb/nas/documents")!
+                return .successWithUTF8Stdout("nas_12tb/nas/media/photos\nnas_12tb/nas/media\nnas_12tb/nas/documents")
             case "zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg":
-                return .success(stdout: [
+                return .successWithUTF8Stdout([
                     snapshotRecord("guid-1", 1, "nas_12tb/nas/documents@20220805-000000"),
                     snapshotRecord("guid-2", 2, "nas_12tb/nas/media@20220805-000000"),
                     snapshotRecord("guid-3", 3, "nas_12tb/nas/media/photos@20220805-000000"),
-                ].joined(separator: "\n"))!
+                ].joined(separator: "\n"))
             case "ssh -p sshPort -i sshKeyPath sshUser@sshIP 'zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg'":
-                return .success(stdout: "")!
+                return .successWithUTF8Stdout("")
             default:
                 sent.withLock { $0.append(command) }
-                return .success()
+                return .emptySuccess()
             }
         }
-        try await Syncer(config: config, dateFormatter: dateFormatter, shell: shell).sync()
+        try await Syncer(config: config, dateFormatter: dateFormatter, shell: shell, dryRunShell: .unusedDryRunShell()).sync()
 
         let order = sent.withLock { $0 }.map { command in
             ["documents@", "media@", "media/photos@"].first { command.contains("nas_12tb/nas/\($0)") } ?? command

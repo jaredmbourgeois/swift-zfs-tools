@@ -84,7 +84,9 @@ extension Consolidator.SnapshotConsolidationSchedule {
     public final class Builder {
         private var periods: [Consolidator.SnapshotConsolidationPeriod] = []
         private let upperBound: String?
-        public init(upperBound: String? = nil) {
+        /// `upperBound` is the schedule's reference time in the run's date format; `nil` means the
+        /// time the run starts.
+        public init(upperBound: String?) {
             self.upperBound = upperBound
         }
 
@@ -122,7 +124,7 @@ extension Consolidator.SnapshotConsolidationSchedule {
             _ snapshots: UInt16,
             every everyMultiple: UInt16,
             _ everyPeriod: Consolidator.SnapshotConsolidationPeriodType,
-            repeatedBy repetitions: UInt16 = 1
+            repeatedBy repetitions: UInt16
         ) -> Self {
             precondition(everyMultiple > 0 && snapshots > 0, "a consolidation band needs everyMultiple ≥ 1 and snapshots ≥ 1")
             periods.append(

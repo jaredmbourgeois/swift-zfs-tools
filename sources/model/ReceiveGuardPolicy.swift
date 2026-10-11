@@ -15,12 +15,15 @@ import Foundation
 //   • `zfs recv -F <target>`                                            (the incoming send stream)
 //   • `zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg`   (enumerate snapshots)
 //   • `zfs destroy <snapshot>`                                          (prune a snapshot)
-// The sender renders each remote command from argv (`ZFSCommand.commandLine`), quoting a token only
-// when it needs quoting, so this parser understands bare words, single-quoting and backslash
-// escapes alike (a 2.1.0 sender quoted every argument; both shapes tokenize to the same argv).
-// Validation is by exact argv shape; the approved command is then exec'd DIRECTLY (no shell), so
-// metacharacters in a rejected command are never interpreted. `SyncerGuardCompatTest` holds every
-// shape the sender emits to this policy.
+// The sender renders each remote command from argv (`ZFSCommand.commandLine`) and hands it to `ssh`
+// as ONE argument, quoting a token only when it needs quoting — so this parser reads bare words,
+// single-quoting and backslash escapes alike, and a quoted token and a bare one are the same argv.
+// (Before 2.2.0 the sender quoted every argument, but for its own local shell, which stripped the
+// quotes before `ssh` ran: this guard only ever received bare words from it, and a name with a space
+// arrived word-split.) Validation is by exact argv shape; the approved command is then exec'd
+// DIRECTLY (no shell), so metacharacters in a rejected command are never interpreted.
+// `tests/resource/remote_shapes/` records, per release, every remote command a sender emits;
+// `RemoteShapesGoldenTest` holds this policy to all of them and `SyncerGuardCompatTest` to a live sync.
 
 public enum ReceiveGuardRejection: Error, Equatable, Sendable {
     case emptyCommand
@@ -97,6 +100,16 @@ public struct ReceiveGuardPolicy: Sendable {
     /// snapshot of the pool root (`pool@…`). Prevents a push key from touching any other pool.
     private func withinPool(_ target: String) -> Bool {
         target == pool || target.hasPrefix(pool + "/") || target.hasPrefix(pool + "@")
+    }
+
+    /// Where `zfs` may live on a receiver, in probe order: sbin on Debian/Ubuntu/Pop comes first.
+    static let zfsPathCandidates = ["/usr/sbin/zfs", "/sbin/zfs", "/usr/local/sbin/zfs"]
+
+    /// The path an approved command is exec'd at: the first candidate `isExecutableFile` accepts, or
+    /// the canonical one when it accepts none (a wrong path just fails the exec — fail-closed). The
+    /// guard never searches `PATH`: a forced command runs what this list names and nothing else.
+    public static func zfsExecutablePath(isExecutableFile: (_ path: String) -> Bool) -> String {
+        zfsPathCandidates.first(where: isExecutableFile) ?? "/usr/sbin/zfs"
     }
 
     private static func isValidPoolName(_ pool: String) -> Bool {

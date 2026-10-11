@@ -244,10 +244,12 @@ extension Arguments {
         public static let sendRateLimitHelp =
             "Limit zfs send throughput with pv -q -L. Example: 20M. Defaults to no rate limit."
 
+        // The option's initial value is its one default (`Defaults.pruneRemoteSnapshots`), declared
+        // here in the parser, so `Syncer.Config` is handed a total value and holds no default.
         @Option(help: "\(Self.pruneRemoteSnapshotsHelp)")
-        public var pruneRemoteSnapshots: Bool?
+        public var pruneRemoteSnapshots: Bool = Defaults.pruneRemoteSnapshots
         public static let pruneRemoteSnapshotsHelp =
-            "Destroy remote snapshots that are no longer present locally. Defaults to true for compatibility; set false for append-only/offsite receivers."
+            "Destroy the destination's snapshots that are no longer present locally. Nothing on the destination is destroyed unless this is true; leave it off for append-only/offsite receivers."
 
         @Option(help: "\(Self.sentBookmarkNameHelp)")
         public var sentBookmarkName: String?
@@ -301,7 +303,7 @@ extension Arguments {
         @Option(help: "\(Self.tempDirHelp)")
         public var tempDir: String?
         public static let tempDirHelp =
-            "Remote directory to rsync the source into and build in, relative to the remote home directory (or absolute). Root, empty, parent-directory paths, and broad absolute paths are rejected; an absolute basename must contain zfs-tools-build. Defaults to zfs-tools-build."
+            "Remote directory to rsync the source into and build in, relative to the remote home directory (or absolute). Root, empty, and parent-directory paths are rejected, and the basename (relative or absolute) must contain zfs-tools-build. Defaults to zfs-tools-build."
 
         @Option(help: "\(Self.destinationHelp)")
         public var destination: String?
@@ -333,6 +335,22 @@ extension Arguments {
         public static let staticSwiftStdlibHelp =
             "Statically link the Swift stdlib where supported so Linux binaries run on hosts without a Swift toolchain installed. Defaults to true; pass --no-static-swift-stdlib for a dynamic build."
 
+        // `.remaining` takes every word after the option, dash-prefixed ones included (`sudo -n …`),
+        // which is why it must come last. The empty array is the parser's one statement of "no
+        // prefix": `Builder.Config` is handed the words and holds no default.
+        @Option(parsing: .remaining, help: "\(Self.remoteCommandPrefixHelp)")
+        public var remoteCommandPrefix: [String] = []
+        public static let remoteCommandPrefixHelp =
+            "Run the remote build's swift commands through these words, e.g. sudo -n my-build-wrapper. Needs --remote, and must be the last option: every word after it is part of the prefix. No prefix when omitted."
+
         public init() {}
+
+        /// A prefix with nothing remote to run through it is a mistake in the command line, not a
+        /// request to build locally without it.
+        public func validate() throws {
+            if !remoteCommandPrefix.isEmpty, remote == nil {
+                throw ValidationError("--remote-command-prefix wraps the swift commands of a remote build: pass --remote <host> before it, or drop the prefix.")
+            }
+        }
     }
 }

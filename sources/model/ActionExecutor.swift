@@ -21,28 +21,38 @@ public enum Action: EquatableModel {
 /// command — one cron entry that chains snapshot → consolidate → sync.
 public struct ActionExecutor: Sendable {
     private let calendar: Calendar
+    private let date: @Sendable () -> Date
     private let dateFormatter: DateFormatter
+    private let diagnostics: @Sendable (_ line: String) -> Void
     private let fileSystem: FileSystem
     private let jsonDecoder: JSONDecoder
     private let shell: ShellAtPath
+    private let dryRunShell: ShellAtPath
 
+    /// Everything the three operations take, handed down from the composition root. `date` is a
+    /// clock, not one instant: a chain can run for hours, and each action reads the time it starts.
     public init(
         calendar: Calendar,
+        date: @escaping @Sendable () -> Date,
         dateFormatter: DateFormatter,
+        diagnostics: @escaping @Sendable (_ line: String) -> Void,
         fileSystem: FileSystem,
         jsonDecoder: JSONDecoder,
-        shell: ShellAtPath
+        shell: ShellAtPath,
+        dryRunShell: ShellAtPath
     ) {
         self.calendar = calendar
+        self.date = date
         self.dateFormatter = dateFormatter
+        self.diagnostics = diagnostics
         self.fileSystem = fileSystem
         self.jsonDecoder = jsonDecoder
         self.shell = shell
+        self.dryRunShell = dryRunShell
     }
 
     /// Run each action in sequence; a failure stops the chain.
     public func execute(_ actions: [Action]) async throws {
-        let date: @Sendable () -> Date = { .now }
         for action in actions {
             switch action {
             case .consolidate(let configPath):
@@ -55,7 +65,9 @@ public struct ActionExecutor: Sendable {
                     ),
                     date: date,
                     dateFormatter: dateFormatter,
-                    shell: shell
+                    diagnostics: diagnostics,
+                    shell: shell,
+                    dryRunShell: dryRunShell
                 ).consolidate()
 
             case .snapshot(let configPath):
@@ -67,7 +79,9 @@ public struct ActionExecutor: Sendable {
                     ),
                     date: date,
                     dateFormatter: dateFormatter,
-                    shell: shell
+                    diagnostics: diagnostics,
+                    shell: shell,
+                    dryRunShell: dryRunShell
                 ).snapshot()
 
             case .sync(let configPath):
@@ -78,7 +92,8 @@ public struct ActionExecutor: Sendable {
                         jsonDecoder: jsonDecoder
                     ),
                     dateFormatter: dateFormatter,
-                    shell: shell
+                    shell: shell,
+                    dryRunShell: dryRunShell
                 ).sync()
             }
         }

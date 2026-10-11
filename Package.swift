@@ -55,14 +55,14 @@ enum Dependency: String {
     var packageURL: String {
         switch self {
         case .argumentParser: "https://github.com/apple/\(package).git"
-        case .shell: "https://github.com/jaredmbourgeois/\(package).git"
+        case .shell: "https://codeberg.org/BourgeoisConcernLLC/\(package).git"
         }
     }
 
     var packageVersion: String {
         switch self {
         case .argumentParser: "1.5.0"
-        case .shell: "2.1.0"
+        case .shell: "3.0.0"
         }
     }
 

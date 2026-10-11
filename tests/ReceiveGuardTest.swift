@@ -171,4 +171,32 @@ final class ReceiveGuardTest: XCTestCase {
         let command = "zfs list -o name -H -t snapshot ; rm -rf /"
         XCTAssertEqual(policy.validate(command), .failure(.wrongShape(command)))
     }
+
+    // MARK: - where the approved command is exec'd
+
+    /// The guard runs `zfs` from a fixed list of paths, probed in order with the probe it is handed —
+    /// here a table, so no file system is read.
+    func testZfsExecutablePathIsTheFirstCandidateTheProbeAccepts() {
+        XCTAssertEqual("/usr/sbin/zfs", ReceiveGuardPolicy.zfsExecutablePath(isExecutableFile: { _ in true }))
+        XCTAssertEqual(
+            "/sbin/zfs",
+            ReceiveGuardPolicy.zfsExecutablePath(isExecutableFile: { ["/sbin/zfs", "/usr/local/sbin/zfs"].contains($0) })
+        )
+        XCTAssertEqual(
+            "/usr/local/sbin/zfs",
+            ReceiveGuardPolicy.zfsExecutablePath(isExecutableFile: { $0 == "/usr/local/sbin/zfs" })
+        )
+        // No candidate is executable: the canonical path, whose exec then fails — fail-closed.
+        XCTAssertEqual("/usr/sbin/zfs", ReceiveGuardPolicy.zfsExecutablePath(isExecutableFile: { _ in false }))
+    }
+
+    /// Only the listed paths are ever probed: a `zfs` somewhere else, on `PATH` or not, is not run.
+    func testZfsExecutablePathProbesOnlyTheListedCandidates() {
+        var probed: [String] = []
+        _ = ReceiveGuardPolicy.zfsExecutablePath(isExecutableFile: { path in
+            probed.append(path)
+            return false
+        })
+        XCTAssertEqual(["/usr/sbin/zfs", "/sbin/zfs", "/usr/local/sbin/zfs"], probed)
+    }
 }

@@ -9,9 +9,9 @@ import Foundation
 import Shell
 
 /// Replicates local snapshots to a remote host over SSH (`zfs send | ssh zfs recv`). Sends
-/// incrementally from the most recent common snapshot when one exists, full otherwise; destroys
-/// remote snapshots that no longer exist locally. Optional path remapping redirects where datasets
-/// land on the destination.
+/// incrementally from the most recent common snapshot when one exists, full otherwise; when the
+/// config asks for it (`pruneRemoteSnapshots`), destroys remote snapshots that no longer exist
+/// locally. Optional path remapping redirects where datasets land on the destination.
 public struct Syncer: Sendable {
     private let config: Syncer.Config
     private let runner: ZFSRunner
@@ -19,15 +19,18 @@ public struct Syncer: Sendable {
     /// line as one more argument.
     private let sshLogin: [String]
 
-    /// Builds the `ssh` login from `config`; `shell` runs the commands (inject a mock to test).
+    /// Builds the `ssh` login from `config`; `shell` runs the commands and `dryRunShell` reports the
+    /// ones a dry run holds back (inject mocks to test).
     public init(
         config: Syncer.Config,
         dateFormatter: DateFormatter,
-        shell: ShellAtPath
+        shell: ShellAtPath,
+        dryRunShell: ShellAtPath
     ) {
         self.config = config
         runner = ZFSRunner(
             shell: shell,
+            dryRunShell: dryRunShell,
             execute: config.execute,
             stringEncoding: config.stringEncoding,
             lineSeparator: config.lineSeparator
@@ -35,10 +38,10 @@ public struct Syncer: Sendable {
         sshLogin = ["-p", config.sshPort, "-i", config.sshKeyPath, "\(config.sshUser)@\(config.sshIP)"]
     }
 
-    /// Replicate every matching dataset: destroy remote-only snapshots, then send the dataset's new
-    /// local snapshots as at most two streams (`sendSteps`). Datasets go in name order, so a parent
-    /// is always received before its children; sends run sequentially — ZFS receive locks the
-    /// dataset and its descendants.
+    /// Replicate every matching dataset: destroy remote-only snapshots (only when the config
+    /// prunes), then send the dataset's new local snapshots as at most two streams (`sendSteps`).
+    /// Datasets go in name order, so a parent is always received before its children; sends run
+    /// sequentially — ZFS receive locks the dataset and its descendants.
     public func sync() async throws {
         let sendRateLimitPipe = try Self.sendRateLimitPipe(for: config.sendRateLimit)
         try Self.validateSentBookmarkName(config.sentBookmarkName)
@@ -401,7 +404,8 @@ extension Syncer {
         let stringEncodingRawValue: UInt
         /// Optional `pv -q -L` rate passed into the local send pipeline, e.g. "20M".
         let sendRateLimit: String?
-        /// Preserve existing behavior by default: prune remote snapshots absent from local.
+        /// Destroy the destination's snapshots that are absent locally. An effect switch: a config
+        /// or command line that omits it does not prune (`Defaults.pruneRemoteSnapshots`).
         let pruneRemoteSnapshots: Bool
         /// Optional local bookmark component (`dataset#name`) advanced after each successful send.
         let sentBookmarkName: String?
@@ -423,11 +427,11 @@ extension Syncer {
             sshUser: String,
             sshIP: String,
             stringEncoding: String.Encoding,
-            sendRateLimit: String? = nil,
-            pruneRemoteSnapshots: Bool = true,
-            sentBookmarkName: String? = nil,
-            remotePathStrip: String? = nil,
-            remotePathRoot: String? = nil
+            sendRateLimit: String?,
+            pruneRemoteSnapshots: Bool,
+            sentBookmarkName: String?,
+            remotePathStrip: String?,
+            remotePathRoot: String?
         ) {
             self.datasetGrep = datasetGrep
             self.dateSeparator = dateSeparator
@@ -463,7 +467,9 @@ extension Syncer {
             sshIP = try container.decode(String.self, forKey: .sshIP)
             stringEncodingRawValue = try container.decode(UInt.self, forKey: .stringEncodingRawValue)
             sendRateLimit = try container.decodeIfPresent(String.self, forKey: .sendRateLimit)
-            pruneRemoteSnapshots = try container.decodeIfPresent(Bool.self, forKey: .pruneRemoteSnapshots) ?? true
+            // A config written before the key existed, or without it, does not prune: the one
+            // default, declared in `Defaults`, is the safe side.
+            pruneRemoteSnapshots = try container.decodeIfPresent(Bool.self, forKey: .pruneRemoteSnapshots) ?? Defaults.pruneRemoteSnapshots
             sentBookmarkName = try container.decodeIfPresent(String.self, forKey: .sentBookmarkName)
             remotePathStrip = try container.decodeIfPresent(String.self, forKey: .remotePathStrip)
             remotePathRoot = try container.decodeIfPresent(String.self, forKey: .remotePathRoot)
@@ -483,7 +489,7 @@ extension Syncer {
             stringEncodingRawValue =
                 arguments.common.stringEncodingRawValue ?? Defaults.stringEncoding.rawValue
             sendRateLimit = arguments.sendRateLimit
-            pruneRemoteSnapshots = arguments.pruneRemoteSnapshots ?? true
+            pruneRemoteSnapshots = arguments.pruneRemoteSnapshots
             sentBookmarkName = arguments.sentBookmarkName
             remotePathStrip = arguments.remotePathStrip
             remotePathRoot = arguments.remotePathRoot

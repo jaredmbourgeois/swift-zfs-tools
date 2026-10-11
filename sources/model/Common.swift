@@ -25,66 +25,44 @@ extension DateFormatter {
     }
 }
 
-public func makeCalendar() -> Calendar {
+/// The Gregorian calendar the retention schedule's period math runs on. `locale` and `timeZone`
+/// are the operator's, read once at the composition root and handed down: where a day or a week
+/// begins decides which window a snapshot falls in.
+public func makeCalendar(locale: Locale, timeZone: TimeZone) -> Calendar {
     var calendar = Calendar(identifier: .gregorian)
-    calendar.locale = .current
-    calendar.timeZone = .current
+    calendar.locale = locale
+    calendar.timeZone = timeZone
     return calendar
 }
 
-public func makeDateFormatter(_ dateFormat: String) -> DateFormatter {
+/// The formatter that writes and parses a snapshot's timestamp suffix. The locale is fixed
+/// (`en_US_POSIX`), so `dateFormat` reads the same on every host; `timeZone` is the operator's, read
+/// once at the composition root and handed down, so a snapshot is named for its local wall time.
+public func makeDateFormatter(_ dateFormat: String, timeZone: TimeZone) -> DateFormatter {
     let dateFormatter = DateFormatter()
     dateFormatter.dateFormat = dateFormat
     dateFormatter.locale = .init(identifier: "en_US_POSIX")
-    dateFormatter.timeZone = .current
+    dateFormatter.timeZone = timeZone
     return dateFormatter
 }
 
-extension ShellAtPath {
-    public init(
-        arguments: Arguments.Common
-    ) {
-        self = .loggingToStdout(
-            shellPath: arguments.shellPath ?? Defaults.shellPath,
-            lineSeparator: arguments.lineSeparator ?? Defaults.lineSeparator,
-            stringEncoding: .init(rawValue: arguments.stringEncodingRawValue ?? Defaults.stringEncoding.rawValue)
+/// `path` when it can be the working directory of the commands the tool spawns — an absolute path —
+/// and otherwise an error naming what was read. A composition root passes what it read from its
+/// process through here first: a deleted current directory reads as an empty path, and the shell
+/// engine traps on a relative one rather than run a command somewhere nobody chose.
+public func validatedWorkingDirectory(_ path: String) throws -> String {
+    guard path.hasPrefix("/") else {
+        throw ErrorType.invalidArgument(
+            name: "working directory",
+            value: path,
+            reason: "expected an absolute path; run the command from a directory that still exists"
         )
     }
-
-    /// A `ShellAtPath` whose observer prints each command, its exit status, and decoded
-    /// stdout/stderr (prefixed with distinct `<tool> <event>:` labels). Shared by the `zfs-tools` CLI and the `zfs-tools-build`
-    /// builder. Take plain values — never read `@Option`s off a hand-constructed `ParsableArguments`,
-    /// which traps.
-    public static func loggingToStdout(
-        toolName: String = "zfs-tools",
-        shellPath: String = Defaults.shellPath,
-        lineSeparator: String = Defaults.lineSeparator,
-        stringEncoding: String.Encoding = Defaults.stringEncoding
-    ) -> ShellAtPath {
-        let formatter = ShellLogFormatter(
-            toolName: toolName,
-            lineSeparator: lineSeparator,
-            stringEncoding: stringEncoding
-        )
-        return .atPath(
-            shellPath,
-            shellObserver: .init(
-                onResult: { command, result in
-                    print(formatter.command(command))
-                    print(formatter.result(result))
-                    if let stdout = formatter.stdout(result.processOutput.stdout) {
-                        print(stdout)
-                    }
-                    if let stderr = formatter.stderr(result.processOutput.stderr) {
-                        print(stderr)
-                    }
-                }
-            ),
-            stringEncoding: stringEncoding
-        )
-    }
+    return path
 }
 
+/// Renders a finished command as the tool's log entries, each prefixed with a distinct
+/// `<tool> <event>:` label. Shared by the `zfs-tools` CLI and the `zfs-tools-build` builder.
 public struct ShellLogFormatter: Sendable {
     public let toolName: String
     public let lineSeparator: String
@@ -125,6 +103,27 @@ public struct ShellLogFormatter: Sendable {
             return "\(toolName) \(label):\(lineSeparator)\(string)"
         }
         return "\(toolName) \(label): (\(data.count) bytes) could not be decoded as \(String(reflecting: stringEncoding)) (\(stringEncoding.rawValue))"
+    }
+}
+
+extension ShellLogFormatter {
+    /// An observer that writes each finished command's log — the command line, its result, then any
+    /// stdout and stderr — through `write`, one entry per call. A composition root supplies `write`
+    /// (a CLI's stdout: the command log is what a run, or a dry run, is asked to show) and attaches
+    /// the observer to the shells it builds, so the model itself never prints.
+    public func resultObserver(
+        write: @escaping @Sendable (_ entry: String) -> Void
+    ) -> ShellObserver<ShellAtPathError> {
+        .resultsOnly { command, result in
+            write(self.command(command))
+            write(self.result(result))
+            if let stdout = self.stdout(result.processOutput.stdout) {
+                write(stdout)
+            }
+            if let stderr = self.stderr(result.processOutput.stderr) {
+                write(stderr)
+            }
+        }
     }
 }
 
@@ -173,7 +172,8 @@ struct SnapshotRecord: Equatable, Sendable {
 
 /// One command the tool issues: WHAT runs (`form`) and whether it changes anything (`effect`).
 /// `effect` is the one input to the dry-run decision (`ZFSRunner`): a read-only command always
-/// runs, so a dry run plans against the real pool; a mutating command runs only when executing.
+/// runs, so a dry run plans against the real pool; a mutating command runs only when executing,
+/// and is otherwise handed to the dry-run shell, which reports it.
 struct ZFSCommand: Equatable, Sendable {
     enum Effect: Sendable {
         case readOnly
@@ -235,7 +235,7 @@ enum ZFS {
         zfs(["bookmark", snapshot, bookmark], .mutating)
     }
 
-    static func snapshot(dataset: String, date: Date, dateFormatter: DateFormatter, dateSeparator: String, recursive: Bool = false) -> ZFSCommand {
+    static func snapshot(dataset: String, date: Date, dateFormatter: DateFormatter, dateSeparator: String, recursive: Bool) -> ZFSCommand {
         var arguments = ["snapshot"]
         if recursive {
             arguments.append("-r")
@@ -261,23 +261,55 @@ enum ZFS {
     }
 }
 
-/// Runs `ZFSCommand`s through the shell and owns the tool's ONE dry-run decision: a read-only
-/// command always runs, a mutating command runs only when `execute` is true and is otherwise
-/// reported by the shell (`ShellResult.dryRun`, nothing spawned). Every operation builds one from
-/// its config, so no call site decides dry-run for itself.
+/// Runs `ZFSCommand`s and owns the tool's ONE dry-run decision, made in `init`, where an operation
+/// builds its runner from its config: a read-only command always goes to `shell`, so a dry run plans
+/// against the real pool; a mutating command goes to `shell` when `execute` is true and otherwise
+/// to `dryRunShell`, which reports the command and spawns nothing. No call site decides dry-run
+/// for itself, and no command carries a dry-run flag.
 struct ZFSRunner: Sendable {
-    let shell: ShellAtPath
-    let execute: Bool
+    /// Runs every read-only command.
+    let reads: ShellAtPath
+    /// Runs every mutating command — or, on a dry run, only reports it.
+    let mutations: ShellAtPath
     let stringEncoding: String.Encoding
     let lineSeparator: String
 
+    init(
+        shell: ShellAtPath,
+        dryRunShell: ShellAtPath,
+        execute: Bool,
+        stringEncoding: String.Encoding,
+        lineSeparator: String
+    ) {
+        reads = shell
+        mutations = execute ? shell : dryRunShell
+        self.stringEncoding = stringEncoding
+        self.lineSeparator = lineSeparator
+    }
+
     func run(_ command: ZFSCommand) async throws -> ShellProcessOutput {
-        let dryRun = command.effect == .mutating && !execute
+        let shell = switch command.effect {
+        case .readOnly: reads
+        case .mutating: mutations
+        }
+        // Exit 0 is the one success `zfs`, `zpool` and `ssh` report. Nothing is written to a
+        // command's stdin, and none is timed out: a send takes as long as its stream does.
         switch command.form {
         case .argv(let executable, let arguments):
-            return try await shell.execute(executable: executable, arguments: arguments, dryRun: dryRun).get()
+            return try await shell.execute(
+                executable: executable,
+                arguments: arguments,
+                statusesForResult: .exitZeroSucceedsSIGTERMCancels(),
+                stream: nil,
+                timeout: nil
+            ).get()
         case .shell(let line):
-            return try await shell.execute(line, dryRun: dryRun).get()
+            return try await shell.execute(
+                line,
+                statusesForResult: .exitZeroSucceedsSIGTERMCancels(),
+                stream: nil,
+                timeout: nil
+            ).get()
         }
     }
 
@@ -304,14 +336,19 @@ extension ShellAtPath {
     /// never dry-runs) is its one caller; every ZFS listing goes through `ZFSRunner.lines(_:)`.
     func lines(
         _ command: ShellCommand,
-        dryRun: Bool,
         encoding: String.Encoding,
         lineSeparator: String
     ) async throws -> [String] {
-        try await execute(command, dryRun: dryRun)
-            .get()
-            .decodeStringLines(encoding: encoding, lineSeparator: lineSeparator)
-            .stdoutTyped
+        // Exit 0 is the one success; nothing is written to stdin; a build is not timed out.
+        try await execute(
+            command,
+            statusesForResult: .exitZeroSucceedsSIGTERMCancels(),
+            stream: nil,
+            timeout: nil
+        )
+        .get()
+        .decodeStringLines(encoding: encoding, lineSeparator: lineSeparator)
+        .stdoutTyped
     }
 }
 

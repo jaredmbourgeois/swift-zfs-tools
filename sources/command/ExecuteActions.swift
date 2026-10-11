@@ -15,20 +15,23 @@ struct ExecuteActions: AsyncParsableCommand {
     var arguments: Arguments.ExecuteActions
 
     func run() async throws {
+        let root = try CommandRoot.readingThisProcess()
         let jsonDecoder = JSONDecoder()
         let actions: [Action] = try decodeFromJSONAtPath(
             arguments.actionsPath,
-            fileSystem: .live,
+            fileSystem: root.fileSystem,
             jsonDecoder: jsonDecoder
         )
-        let calendar = makeCalendar()
-        let dateFormatter = makeDateFormatter(arguments.common.dateFormat ?? Defaults.dateFormat)
+        let shells = root.shells(arguments.common)
         let executor = ActionExecutor(
-            calendar: calendar,
-            dateFormatter: dateFormatter,
-            fileSystem: .live,
+            calendar: root.calendar(),
+            date: root.date,
+            dateFormatter: root.dateFormatter(arguments.common),
+            diagnostics: root.diagnostics,
+            fileSystem: root.fileSystem,
             jsonDecoder: jsonDecoder,
-            shell: Shell(arguments: arguments.common)
+            shell: shells.shell,
+            dryRunShell: shells.dryRunShell
         )
         try await executor.execute(actions)
     }
@@ -39,6 +42,7 @@ struct ExecuteActionsConfigure: ParsableCommand {
     var arguments: Arguments.ExecuteActionsConfigure
 
     func run() throws {
+        let root = try CommandRoot.readingThisProcess()
         try encode(
             [
                 Action.snapshot(configPath: "/path/to/snapshot/config.json"),
@@ -46,7 +50,7 @@ struct ExecuteActionsConfigure: ParsableCommand {
                 Action.sync(configPath: "/path/to/sync/config.json"),
             ],
             toJSONAtPath: arguments.outputPath,
-            fileSystem: .live,
+            fileSystem: root.fileSystem,
             jsonEncoder: .init()
         )
     }

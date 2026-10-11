@@ -12,5 +12,5 @@
 /// `install_zfs_tools.sh --expected-version`'s safety check. Bump this one constant when cutting a release;
 /// both commands pick it up automatically.
 public enum ToolVersion {
-    public static let current = "2.2.0"
+    public static let current = "3.0.0"
 }

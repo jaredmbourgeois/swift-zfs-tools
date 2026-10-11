@@ -11,11 +11,7 @@ import XCTest
 @testable import ZFSToolsModel
 
 final class ConsolidatorConfigTest: XCTestCase {
-    private lazy var defaultConfig: Consolidator.Config = {
-        Self.config(dateFormatter: dateFormatter)
-    }()
-
-    private let fileManager = FileManager.default
+    private let defaultConfig = ConsolidatorConfigTest.defaultScheduleConfig(upperBound: testDateString)
 
     func testConfigDecode() throws {
         let data = try XCTUnwrap(Self.defaultConfigEncode.data(using: .utf8))
@@ -37,15 +33,13 @@ final class ConsolidatorConfigTest: XCTestCase {
         XCTAssertEqual(Self.defaultConfigEncode, string)
     }
 
+    /// The two fixtures in `tests/resource/`: one names the schedule's upper bound, one leaves it out.
     func testConfigFromJSON() throws {
         let decoder = JSONDecoder()
-        XCTAssertEqual(defaultConfig, try decodeResourceJSON(named: "ConsolidatorConfig", fileManager: fileManager, jsonDecoder: decoder))
+        XCTAssertEqual(defaultConfig, try decodeResourceJSON(named: "ConsolidatorConfig", jsonDecoder: decoder))
         XCTAssertEqual(
-            Self.config(
-                date: nil,
-                dateFormatter: dateFormatter
-            ),
-            try decodeResourceJSON(named: "ConsolidatorConfigNoUpperBound", fileManager: fileManager, jsonDecoder: decoder)
+            Self.defaultScheduleConfig(upperBound: nil),
+            try decodeResourceJSON(named: "ConsolidatorConfigNoUpperBound", jsonDecoder: decoder)
         )
     }
 
@@ -84,36 +78,21 @@ final class ConsolidatorConfigTest: XCTestCase {
 }
 
 extension ConsolidatorConfigTest {
-    static func config(
-        consolidationSchedule: Consolidator.SnapshotConsolidationSchedule? = nil,
-        date: String? = testDateString,
-        dateFormatter: DateFormatter
-    ) -> Consolidator.Config {
+    /// An executing consolidation of `nas_12tb/nas/` on the tool's default retention schedule, with
+    /// no pool threshold and nothing protected: the config the JSON fixtures hold. `upperBound` is
+    /// the schedule's reference time (`nil`: the time the run starts).
+    static func defaultScheduleConfig(upperBound: String?) -> Consolidator.Config {
         .init(
             datasetGrep: "nas_12tb/nas/",
             dateSeparator: "@",
             execute: true,
             lineSeparator: "\n",
-            schedule: consolidationSchedule ?? Defaults.consolidationSchedule(upperBound: date),
+            maxPoolUtilizationPercent: nil,
+            minFreeBytes: nil,
+            schedule: Defaults.consolidationSchedule(upperBound: upperBound),
             snapshotsNotConsolidated: [],
             stringEncoding: .utf8
         )
-    }
-
-    static func consolidationPeriodDays(
-        upperBound: String = testDateString
-    ) -> Consolidator.SnapshotConsolidationSchedule {
-        Consolidator.SnapshotConsolidationSchedule.Builder(upperBound: upperBound)
-            .keepingSnapshots(1, every: 1, .days, repeatedBy: 365)
-            .build()
-    }
-
-    static func consolidationPeriodWeeks(
-        upperBound: String = testDateString
-    ) -> Consolidator.SnapshotConsolidationSchedule {
-        Consolidator.SnapshotConsolidationSchedule.Builder(upperBound: upperBound)
-            .keepingSnapshots(1, every: 1, .weeks, repeatedBy: 52)
-            .build()
     }
 
     static let defaultConfigEncode = "{\"datasetGrep\":\"nas_12tb\\/nas\\/\",\"dateSeparator\":\"@\",\"execute\":true,\"lineSeparator\":\"\\n\",\"schedule\":{\"periods\":[{\"everyMultiple\":1,\"everyPeriod\":\"days\",\"repetitions\":7,\"snapshots\":1},{\"everyMultiple\":1,\"everyPeriod\":\"weeks\",\"repetitions\":3,\"snapshots\":1},{\"everyMultiple\":1,\"everyPeriod\":\"months\",\"repetitions\":11,\"snapshots\":1},{\"everyMultiple\":1,\"everyPeriod\":\"years\",\"snapshots\":1}],\"upperBound\":\"\(testDateString)\"},\"snapshotsNotConsolidated\":[],\"stringEncodingRawValue\":4}"

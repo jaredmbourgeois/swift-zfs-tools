@@ -1,0 +1,8 @@
+zfs list -t snapshot -H -p -o guid,createtxg,name -s createtxg
+zfs destroy nas_12tb/nas/documents@20220730-000000
+zfs recv -F nas_12tb/nas/documents
+zfs recv -F nas_12tb/nas/media@20220806-000000
+zfs destroy 'nas_12tb/nas/my data@20220730-000000'
+zfs recv -F 'nas_12tb/nas/my data@20220806-000000'
+zfs recv -F 'nas_12tb/nas/my docs@20220805-000000'
+zfs recv -F 'nas_12tb/nas/my docs'

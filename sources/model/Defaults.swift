@@ -22,7 +22,14 @@ public enum Defaults {
     public static let dateSeparator = "@"
     public static let execute = false
     public static let lineSeparator = "\n"
+    /// `sync` leaves the destination's snapshots alone unless it is told to prune them: destroying
+    /// is the effect, so an omitted `--prune-remote-snapshots` / `pruneRemoteSnapshots` is the safe
+    /// side. This is the one declaration; the option and the config decoder both read it.
+    public static let pruneRemoteSnapshots = false
     public static let recursive = false
     public static let shellPath = "/bin/bash"
+    /// Seconds between SIGTERM and SIGKILL when a cancelled run tears a child process down: long
+    /// enough for `zfs` or `ssh` to exit on the first signal, short enough to bound one that will not.
+    public static let shellTerminationGracePeriod = TimeInterval(2)
     public static let stringEncoding = String.Encoding.utf8
 }
